@@ -364,6 +364,265 @@ THREE.MMDLoader.prototype.parsePmd = function ( buffer ) {
 
 	};
 
+	var parseMorphFrames = function () {
+
+		var parseMorphFrame = function () {
+
+			var p = {};
+			p.index = dv.getUint16();
+			return p;
+
+		};
+
+		var metadata = pmd.metadata;
+		metadata.morphFrameCount = dv.getUint8();
+
+		pmd.morphFrames = [];
+
+		for ( var i = 0; i < metadata.morphFrameCount; i++ ) {
+
+			pmd.morphFrames.push( parseMorphFrame() );
+
+		}
+
+	};
+
+	var parseBoneFrameNames = function () {
+
+		var parseBoneFrameName = function () {
+
+			var p = {};
+			p.name = dv.getSjisStringsAsUnicode( 50 );
+			return p;
+
+		};
+
+		var metadata = pmd.metadata;
+		metadata.boneFrameNameCount = dv.getUint8();
+
+		pmd.boneFrameNames = [];
+
+		for ( var i = 0; i < metadata.boneFrameNameCount; i++ ) {
+
+			pmd.boneFrameNames.push( parseBoneFrameName() );
+
+		}
+
+	};
+
+	var parseBoneFrames = function () {
+
+		var parseBoneFrame = function () {
+
+			var p = {};
+			p.boneIndex = dv.getUint16();
+			p.frameIndex = dv.getUint8();
+			return p;
+
+		};
+
+		var metadata = pmd.metadata;
+		metadata.boneFrameCount = dv.getUint32();
+
+		pmd.boneFrames = [];
+
+		for ( var i = 0; i < metadata.boneFrameCount; i++ ) {
+
+			pmd.boneFrames.push( parseBoneFrame() );
+
+		}
+
+	};
+
+	var parseEnglishHeader = function () {
+
+		var metadata = pmd.metadata;
+		metadata.englishCompatibility = dv.getUint8();
+
+		if ( metadata.englishCompatibility > 0 ) {
+
+			metadata.englishModelName = dv.getSjisStringsAsUnicode( 20 );
+			metadata.englishComment = dv.getSjisStringsAsUnicode( 256 );
+
+		}
+
+	};
+
+	var parseEnglishBoneNames = function () {
+
+		var parseEnglishBoneName = function () {
+
+			var p = {};
+			p.name = dv.getSjisStringsAsUnicode( 20 );
+			return p;
+
+		};
+
+		var metadata = pmd.metadata;
+
+		if ( metadata.englishCompatibility === 0 ) {
+
+			return;
+
+		}
+
+		pmd.englishBoneNames = [];
+
+		for ( var i = 0; i < metadata.boneCount; i++ ) {
+
+			pmd.englishBoneNames.push( parseEnglishBoneName() );
+
+		}
+
+	};
+
+	var parseEnglishMorphNames = function () {
+
+		var parseEnglishMorphName = function () {
+
+			var p = {};
+			p.name = dv.getSjisStringsAsUnicode( 20 );
+			return p;
+
+		};
+
+		var metadata = pmd.metadata;
+
+		if ( metadata.englishCompatibility === 0 ) {
+
+			return;
+
+		}
+
+		pmd.englishMorphNames = [];
+
+		for ( var i = 0; i < metadata.morphCount - 1; i++ ) {
+
+			pmd.englishMorphNames.push( parseEnglishMorphName() );
+
+		}
+
+	};
+
+	var parseEnglishBoneFrameNames = function () {
+
+		var parseEnglishBoneFrameName = function () {
+
+			var p = {};
+			p.name = dv.getSjisStringsAsUnicode( 50 );
+			return p;
+
+		};
+
+		var metadata = pmd.metadata;
+
+		if ( metadata.englishCompatibility === 0 ) {
+
+			return;
+
+		}
+
+		pmd.englishBoneFrameNames = [];
+
+		for ( var i = 0; i < metadata.boneFrameNameCount; i++ ) {
+
+			pmd.englishBoneFrameNames.push( parseEnglishBoneFrameName() );
+
+		}
+
+	};
+
+	var parseToonTextures = function () {
+
+		var parseToonTexture = function () {
+
+			var p = {};
+			p.fileName = dv.getSjisStringsAsUnicode( 100 );
+			return p;
+
+		};
+
+		pmd.toonTextures = [];
+
+		for ( var i = 0; i < 10; i++ ) {
+
+			pmd.toonTextures.push( parseToonTexture() );
+
+		}
+
+	};
+
+	var parseRigidBodies = function () {
+
+		var parseRigidBody = function () {
+
+			var p = {};
+			p.name = dv.getSjisStringsAsUnicode( 20 );
+			p.boneIndex = dv.getUint16();
+			p.groupIndex = dv.getUint8();
+			p.groupTarget = dv.getUint16();
+			p.shapeType = dv.getUint8();
+			p.width = dv.getFloat32();
+			p.height = dv.getFloat32();
+			p.depth = dv.getFloat32();
+			p.position = dv.getFloat32Array( 3 );
+			p.rotation = dv.getFloat32Array( 3 );
+			p.weight = dv.getFloat32();
+			p.positionDamping = dv.getFloat32();
+			p.rotationDamping = dv.getFloat32();
+			p.restriction = dv.getFloat32();
+			p.friction = dv.getFloat32();
+			p.type = dv.getUint8();
+			return p;
+
+		};
+
+		var metadata = pmd.metadata;
+		metadata.rigidBodyCount = dv.getUint32();
+
+		pmd.rigidBodies = [];
+
+		for ( var i = 0; i < metadata.rigidBodyCount; i++ ) {
+
+			pmd.rigidBodies.push( parseRigidBody() );
+
+		}
+
+	};
+
+	var parseConstraints = function () {
+
+		var parseConstraint = function () {
+
+			var p = {};
+			p.name = dv.getSjisStringsAsUnicode( 20 );
+			p.rigidBodyIndex1 = dv.getUint32();
+			p.rigidBodyIndex2 = dv.getUint32();
+			p.position = dv.getFloat32Array( 3 );
+			p.rotation = dv.getFloat32Array( 3 );
+			p.translationLimitation1 = dv.getFloat32Array( 3 );
+			p.translationLimitation2 = dv.getFloat32Array( 3 );
+			p.rotationLimitation1 = dv.getFloat32Array( 3 );
+			p.rotationLimitation2 = dv.getFloat32Array( 3 );
+			p.springPosition = dv.getFloat32Array( 3 );
+			p.springRotation = dv.getFloat32Array( 3 );
+			return p;
+
+		};
+
+		var metadata = pmd.metadata;
+		metadata.constraintCount = dv.getUint32();
+
+		pmd.constraints = [];
+
+		for ( var i = 0; i < metadata.constraintCount; i++ ) {
+
+			pmd.constraints.push( parseConstraint() );
+
+		}
+
+	};
+
 	parseHeader();
 	parseVertices();
 	parseFaces();
@@ -371,6 +630,18 @@ THREE.MMDLoader.prototype.parsePmd = function ( buffer ) {
 	parseBones();
 	parseIks();
 	parseMorphs();
+	parseMorphFrames();
+	parseBoneFrameNames();
+	parseBoneFrames();
+	parseEnglishHeader();
+	parseEnglishBoneNames();
+	parseEnglishMorphNames();
+	parseEnglishBoneFrameNames();
+	parseToonTextures();
+	parseRigidBodies();
+	parseConstraints();
+
+	// console.log( pmd ); // for console debug
 
 	return pmd;
 
@@ -1404,6 +1675,52 @@ THREE.MMDLoader.prototype.createMesh = function ( model, vmd, texturePath, onPro
 
 	};
 
+	var initPhysics = function () {
+
+		var rigidBodies = [];
+		var constraints = [];
+
+		for ( var i = 0; i < model.metadata.rigidBodyCount; i++ ) {
+
+			var b = model.rigidBodies[ i ];
+			var keys = Object.keys( b );
+
+			var p = {};
+
+			for ( var j = 0; j < keys.length; j++ ) {
+
+				var key = keys[ j ];
+				p[ key ] = b[ key ];
+
+			}
+
+			rigidBodies.push( p );
+
+		}
+
+		for ( var i = 0; i < model.metadata.constraintCount; i++ ) {
+
+			var c = model.constraints[ i ];
+			var keys = Object.keys( c );
+
+			var p = {};
+
+			for ( var j = 0; j < keys.length; j++ ) {
+
+				var key = keys[ j ];
+				p[ key ] = c[ key ];
+
+			}
+
+			constraints.push( p );
+
+		}
+
+		geometry.rigidBodies = rigidBodies;
+		geometry.constraints = constraints;
+
+	};
+
 	var initMotionAnimations = function () {
 
 		var orderedMotions = [];
@@ -1670,6 +1987,7 @@ THREE.MMDLoader.prototype.createMesh = function ( model, vmd, texturePath, onPro
 	initIKs();
 	initMorphs();
 	initMaterials();
+	initPhysics();
 
 	if ( vmd !== null ) {
 
