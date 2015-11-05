@@ -36,8 +36,10 @@
 		<script src="../build/three.min.js"></script>
 
 		<script src="js/libs/charsetencoder.min.js"></script>
+		<script src="js/libs/ammo.js"></script>
 		<script src="js/loaders/MMDLoader.js"></script>
 		<script src="js/animation/CCDIKSolver.js"></script>
+		<script src="js/animation/Physics.js"></script>
 
 		<script src="js/Detector.js"></script>
 		<script src="js/libs/stats.min.js"></script>
@@ -47,10 +49,9 @@
 			var container, stats;
 
 			var mesh, camera, mixer, scene, renderer;
+			var ikSolver, physics;
 
 			var mouseX = 0, mouseY = 0;
-
-			var ikSolver;
 
 			var windowHalfX = window.innerWidth / 2;
 			var windowHalfY = window.innerHeight / 2;
@@ -104,6 +105,7 @@
 					mixer.addAction( new THREE.AnimationAction( mesh.geometry.morphAnimations[ 0 ] ) ) ;
 
 					ikSolver = new THREE.CCDIKSolver( mesh );
+					physics = new THREE.Physics( mesh );
 
 				}, onProgress, onError );
 
@@ -160,14 +162,10 @@
 
 				if( mesh ) {
 
-					mixer.update( clock.getDelta() );
-
-					// this may should be in THREE.AnimationMixer or somewhere
-					if( ikSolver ) {
-
-						ikSolver.update();
-
-					}
+					var delta = clock.getDelta();
+					mixer.update( delta );
+					ikSolver.update();
+					physics.update( delta );
 
 				}
 
