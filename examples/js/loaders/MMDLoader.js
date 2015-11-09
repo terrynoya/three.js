@@ -268,10 +268,10 @@ THREE.MMDLoader.prototype.parsePmd = function ( buffer ) {
 			// So using charcode strings as workaround and keep original strings in .originalName.
 			p.originalName = dv.getSjisStringsAsUnicode( 20 );
 			p.name = dv.toCharcodeStrings( p.originalName );
-			p.parentIndex = dv.getUint16();
-			p.tailIndex = dv.getUint16();
+			p.parentIndex = dv.getInt16();
+			p.tailIndex = dv.getInt16();
 			p.type = dv.getUint8();
-			p.ikIndex = dv.getUint16();
+			p.ikIndex = dv.getInt16();
 			p.position = dv.getFloat32Array( 3 );
 			return p;
 
@@ -415,7 +415,7 @@ THREE.MMDLoader.prototype.parsePmd = function ( buffer ) {
 		var parseBoneFrame = function () {
 
 			var p = {};
-			p.boneIndex = dv.getUint16();
+			p.boneIndex = dv.getInt16();
 			p.frameIndex = dv.getUint8();
 			return p;
 
@@ -558,7 +558,7 @@ THREE.MMDLoader.prototype.parsePmd = function ( buffer ) {
 
 			var p = {};
 			p.name = dv.getSjisStringsAsUnicode( 20 );
-			p.boneIndex = dv.getUint16();
+			p.boneIndex = dv.getInt16();
 			p.groupIndex = dv.getUint8();
 			p.groupTarget = dv.getUint16();
 			p.shapeType = dv.getUint8();
@@ -1164,6 +1164,13 @@ THREE.MMDLoader.prototype.createMesh = function ( model, vmd, texturePath, onPro
 
 		};
 
+		var convertEyler = function ( r ) {
+
+			r[ 0 ] = -r[ 0 ];
+			r[ 1 ] = -r[ 1 ];
+
+		};
+
 		var convertIndexOrder = function ( p ) {
 
 			var tmp = p[ 2 ];
@@ -1215,6 +1222,20 @@ THREE.MMDLoader.prototype.createMesh = function ( model, vmd, texturePath, onPro
 				convertVector( m.elements[ j ].position );
 
 			}
+
+		}
+
+		for ( var i = 0; i < model.metadata.rigidBodyCount; i++ ) {
+
+			convertVector( model.rigidBodies[ i ].position );
+			convertEyler( model.rigidBodies[ i ].rotation );
+
+		}
+
+		for ( var i = 0; i < model.metadata.constraintCount; i++ ) {
+
+			convertVector( model.constraints[ i ].position );
+			convertEyler( model.constraints[ i ].rotation );
 
 		}
 
