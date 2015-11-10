@@ -2,7 +2,6 @@
  * @author takahiro / https://github.com/takahirox
  *
  * Dependencies
- *  charset-encoder-js https://github.com/takahirox/charset-encoder-js
  *  Ammo.js            https://github.com/kripken/ammo.js
  */
 
@@ -28,6 +27,7 @@ THREE.Physics.prototype = {
 		this.initWorld();
 		this.initRigidBodies();
 		this.initConstraints();
+		this.reset();
 
 	},
 
@@ -127,7 +127,13 @@ THREE.Physics.prototype = {
 
 	},
 
-	resetRigidBodies: function () {
+	reset: function () {
+
+		for ( var i = 0; i < this.bodies.length; i++ ) {
+
+			this.bodies[ i ].setTransformFromBone();
+
+		}
 
 	}
 
@@ -283,12 +289,6 @@ THREE.Physics.PhysicsHelper.prototype = {
 
 	},
 
-	setOriginFromVector3: function ( t, v ) {
-
-		t.getOrigin().setValue( v.x, v.y, v.z );
-
-	},
-
 	setBasisFromArray3: function ( t, a ) {
 
 		t.getBasis().setEulerZYX( a[ 0 ], a[ 1 ], a[ 2 ] );
@@ -311,14 +311,6 @@ THREE.Physics.PhysicsHelper.prototype = {
 		q.setZ( a[ 2 ] );
 		q.setW( a[ 3 ] );
 		return q;
-
-	},
-
-	setBasisFromQuaternion: function ( t, q ) {
-
-		var q = this.array4ToQuaternion( [ q.x, q.y, q.z, q.w ] );
-		this.setBasis( t, q );
-		this.freeQ( q );
 
 	},
 
@@ -626,7 +618,7 @@ THREE.Physics.RigidBody.prototype = {
 
 		var boneForm = helper.allocTr();
 		helper.setIdentity( boneForm );
-		helper.setOriginFromVector3( boneForm, bone.getWorldPosition() );
+		helper.setOriginFromArray3( boneForm, bone.getWorldPosition().toArray() );
 
 		var form = helper.multiplyTransforms( boneForm, boneOffsetForm );
 		var state = new Ammo.btDefaultMotionState( form );
@@ -675,13 +667,13 @@ THREE.Physics.RigidBody.prototype = {
 
 		}
 
-		if( this.params.type === 0 /* && this.body.boneIndex != 0 */ ) {
+		if( this.params.type === 0 /* && this.params.boneIndex !== 0 */ ) {
 
 			this.setTransformFromBone();
 
 		}
 
-		if( this.params.type === 2 /* && this.body.boneIndex != 0 */ ) {
+		if( this.params.type === 2 /* && this.params.boneIndex !== 0 */ ) {
 
 			this.setPositionFromBone();
 
@@ -696,8 +688,8 @@ THREE.Physics.RigidBody.prototype = {
 		var q = this.bone.getWorldQuaternion();
 
 		var tr = helper.allocTr();
-		helper.setOriginFromVector3( tr, p );
-		helper.setBasisFromQuaternion( tr, q );
+		helper.setOriginFromArray3( tr, p.toArray() );
+		helper.setBasisFromArray4( tr, q.toArray() );
 
 		var form = helper.multiplyTransforms( tr, this.boneOffsetForm );
 
@@ -718,8 +710,8 @@ THREE.Physics.RigidBody.prototype = {
 		var q = this.bone.getWorldQuaternion();
 
 		var tr = helper.allocTr();
-		helper.setOriginFromVector3( tr, p );
-		helper.setBasisFromQuaternion( tr, q );
+		helper.setOriginFromArray3( tr, p.toArray() );
+		helper.setBasisFromArray4( tr, q.toArray() );
 
 		var form = helper.multiplyTransforms( tr, this.boneOffsetForm );
 
@@ -757,11 +749,12 @@ THREE.Physics.RigidBody.prototype = {
 		var tq = helper.allocThreeQuaternion();
 		var tq2 = helper.allocThreeQuaternion();
 
-		tq.setFromRotationMatrix( this.bone.matrixWorld );
-		tq.conjugate();
-		tq2.set( q.x(), q.y(), q.z(), q.w() );
-		tq.multiply( tq2 );
-		this.bone.quaternion.copy( tq );
+		tq.set( q.x(), q.y(), q.z(), q.w() );
+		tq2.setFromRotationMatrix( this.bone.matrixWorld );
+		tq2.conjugate();
+		tq2.multiply( tq );
+
+		this.bone.quaternion.copy( tq2 );
 
 		if ( this.params.type === 1 ) {
 
@@ -822,7 +815,7 @@ THREE.Physics.Constraint.prototype = {
 			if ( bodyA.params.boneIndex   >  0 && bodyB.params.boneIndex   >  0 &&
 			     bodyA.params.boneIndex !== -1 && bodyB.params.boneIndex !== -1 ) {
 
-				if( bodyB.params.bone === bodyB.bone ) {
+				if( bodyB.bone.parent === bodyA.bone ) {
 
 					bodyB.params.type = 1;
 
@@ -898,8 +891,8 @@ THREE.Physics.Constraint.prototype = {
 		this.constraint = constraint;
 
 		helper.freeTr( form );
-		Ammo.destroy( formA );
-		Ammo.destroy( formB );
+		helper.freeTr( formA );
+		helper.freeTr( formB );
 		helper.freeTr( formInverseA );
 		helper.freeTr( formInverseB );
 		helper.freeTr( formA2 );
