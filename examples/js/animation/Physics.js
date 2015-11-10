@@ -360,7 +360,7 @@ THREE.Physics.PhysicsHelper.prototype = {
 
 	},
 
-	multiplyMatrices3: function( m1, m2 ) {
+	multiplyMatrices3: function ( m1, m2 ) {
 
 		var m3 = [];
 
@@ -401,7 +401,7 @@ THREE.Physics.PhysicsHelper.prototype = {
 
 	},
 
-	dotVectors3: function(v1, v2) {
+	dotVectors3: function( v1, v2 ) {
 
 		return v1.x() * v2.x() + v1.y() * v2.y() + v1.z() * v2.z();
 
@@ -846,19 +846,18 @@ THREE.Physics.Constraint.prototype = {
 		var all = helper.allocV();
 		var aul = helper.allocV();
 
-		// Left to Right
-		lll.setValue(  params.translationLimitation1[ 0 ],
-		               params.translationLimitation1[ 1 ],
-		              -params.translationLimitation2[ 2 ] );
-		lul.setValue(  params.translationLimitation2[ 0 ],
-		               params.translationLimitation2[ 1 ],
-		              -params.translationLimitation1[ 2 ] );
-		all.setValue( -params.rotationLimitation2[ 0 ],
-		              -params.rotationLimitation2[ 1 ],
-		               params.rotationLimitation1[ 2 ] );
-		aul.setValue( -params.rotationLimitation1[ 0 ],
-		              -params.rotationLimitation1[ 1 ],
-		               params.rotationLimitation2[ 2 ] );
+		lll.setValue( params.translationLimitation1[ 0 ],
+		              params.translationLimitation1[ 1 ],
+		              params.translationLimitation1[ 2 ] );
+		lul.setValue( params.translationLimitation2[ 0 ],
+		              params.translationLimitation2[ 1 ],
+		              params.translationLimitation2[ 2 ] );
+		all.setValue( params.rotationLimitation1[ 0 ],
+		              params.rotationLimitation1[ 1 ],
+		              params.rotationLimitation1[ 2 ] );
+		aul.setValue( params.rotationLimitation2[ 0 ],
+		              params.rotationLimitation2[ 1 ],
+		              params.rotationLimitation2[ 2 ] );
 
 		constraint.setLinearLowerLimit( lll );
 		constraint.setLinearUpperLimit( lul );
@@ -867,7 +866,7 @@ THREE.Physics.Constraint.prototype = {
 
 		for ( var i = 0; i < 3; i++ ) {
 
-			if( params.springPosition[i] !== 0 ) {
+			if( params.springPosition[ i ] !== 0 ) {
 
 				constraint.enableSpring( i, true );
 				constraint.setStiffness( i, params.springPosition[ i ] );

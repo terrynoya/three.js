@@ -684,7 +684,7 @@ THREE.MMDLoader.prototype.parsePmx = function ( buffer ) {
 		metadata.materialIndexSize = dv.getUint8();
 		metadata.boneIndexSize = dv.getUint8();
 		metadata.morphIndexSize = dv.getUint8();
-		metadata.rigidbodyIndexSize = dv.getUint8();
+		metadata.rigidBodyIndexSize = dv.getUint8();
 		metadata.modelName = dv.getTextBuffer();
 		metadata.englishModelName = dv.getTextBuffer();
 		metadata.comment = dv.getTextBuffer();
@@ -1043,6 +1043,117 @@ THREE.MMDLoader.prototype.parsePmx = function ( buffer ) {
 
 	};
 
+	var parseFrames = function () {
+
+		var parseFrame = function () {
+
+			var p = {};
+			p.name = dv.getTextBuffer();
+			p.englishName = dv.getTextBuffer();
+			p.type = dv.getUint8();
+			p.elementCount = dv.getUint32();
+			p.elements = [];
+
+			for ( var i = 0; i < p.elementCount; i++ ) {
+
+				var e = {};
+				e.target = dv.getUint8();
+				e.index = ( e.target === 0 ) ? dv.getNumber( pmx.metadata.boneIndexSize ) : dv.getNumber( pmx.metadata.morphIndexSize );
+				p.elements.push( e );
+
+			}
+
+			return p;
+
+		};
+
+		var metadata = pmx.metadata;
+		metadata.frameCount = dv.getUint32();
+
+		pmx.frames = [];
+
+		for ( var i = 0; i < metadata.frameCount; i++ ) {
+
+			pmx.frames.push( parseFrame() );
+
+		}
+
+	};
+
+	var parseRigidBodies = function () {
+
+		var parseRigidBody = function () {
+
+			var p = {};
+			p.name = dv.getTextBuffer();
+			p.englishName = dv.getTextBuffer();
+			p.boneIndex = dv.getNumber( pmx.metadata.boneIndexSize );
+			p.groupIndex = dv.getUint8();
+			p.groupTarget = dv.getUint16();
+			p.shapeType = dv.getUint8();
+			p.width = dv.getFloat32();
+			p.height = dv.getFloat32();
+			p.depth = dv.getFloat32();
+			p.position = dv.getFloat32Array( 3 );
+			p.rotation = dv.getFloat32Array( 3 );
+			p.weight = dv.getFloat32();
+			p.positionDamping = dv.getFloat32();
+			p.rotationDamping = dv.getFloat32();
+			p.restriction = dv.getFloat32();
+			p.friction = dv.getFloat32();
+			p.type = dv.getUint8();
+			return p;
+
+		};
+
+		var metadata = pmx.metadata;
+		metadata.rigidBodyCount = dv.getUint32();
+
+		pmx.rigidBodies = [];
+
+		for ( var i = 0; i < metadata.rigidBodyCount; i++ ) {
+
+			pmx.rigidBodies.push( parseRigidBody() );
+
+		}
+
+	};
+
+	var parseConstraints = function () {
+
+		var parseConstraint = function () {
+
+			var p = {};
+			p.name = dv.getTextBuffer();
+			p.englishName = dv.getTextBuffer();
+			p.type = dv.getUint8();
+			p.rigidBodyIndex1 = dv.getNumber( pmx.metadata.rigidBodyIndexSize );
+			p.rigidBodyIndex2 = dv.getNumber( pmx.metadata.rigidBodyIndexSize );
+			p.position = dv.getFloat32Array( 3 );
+			p.rotation = dv.getFloat32Array( 3 );
+			p.translationLimitation1 = dv.getFloat32Array( 3 );
+			p.translationLimitation2 = dv.getFloat32Array( 3 );
+			p.rotationLimitation1 = dv.getFloat32Array( 3 );
+			p.rotationLimitation2 = dv.getFloat32Array( 3 );
+			p.springPosition = dv.getFloat32Array( 3 );
+			p.springRotation = dv.getFloat32Array( 3 );
+			return p;
+
+		};
+
+		var metadata = pmx.metadata;
+		metadata.constraintCount = dv.getUint32();
+
+		pmx.constraints = [];
+
+		for ( var i = 0; i < metadata.constraintCount; i++ ) {
+
+			pmx.constraints.push( parseConstraint() );
+
+		}
+
+	};
+
 	parseHeader();
 	parseVertices();
 	parseFaces();
@@ -1050,6 +1161,9 @@ THREE.MMDLoader.prototype.parsePmx = function ( buffer ) {
 	parseMaterials();
 	parseBones();
 	parseMorphs();
+	parseFrames();
+	parseRigidBodies();
+	parseConstraints();
 
 	// console.log( pmx ); // for console debug
 
@@ -1164,7 +1278,7 @@ THREE.MMDLoader.prototype.createMesh = function ( model, vmd, texturePath, onPro
 
 		};
 
-		var convertEyler = function ( r ) {
+		var convertEuler = function ( r ) {
 
 			r[ 0 ] = -r[ 0 ];
 			r[ 1 ] = -r[ 1 ];
@@ -1176,6 +1290,25 @@ THREE.MMDLoader.prototype.createMesh = function ( model, vmd, texturePath, onPro
 			var tmp = p[ 2 ];
 			p[ 2 ] = p[ 0 ];
 			p[ 0 ] = tmp;
+
+		};
+
+		var convertVectorRange = function ( v1, v2 ) {
+
+			var tmp = -v2[ 2 ];
+			v2[ 2 ] = -v1[ 2 ];
+			v1[ 2 ] = tmp;
+
+		};
+
+		var convertEulerRange = function ( r1, r2 ) {
+
+			var tmp1 = -r2[ 0 ];
+			var tmp2 = -r2[ 1 ];
+			r2[ 0 ] = -r1[ 0 ];
+			r2[ 1 ] = -r1[ 1 ];
+			r1[ 0 ] = tmp1;
+			r1[ 1 ] = tmp2;
 
 		};
 
@@ -1228,14 +1361,16 @@ THREE.MMDLoader.prototype.createMesh = function ( model, vmd, texturePath, onPro
 		for ( var i = 0; i < model.metadata.rigidBodyCount; i++ ) {
 
 			convertVector( model.rigidBodies[ i ].position );
-			convertEyler( model.rigidBodies[ i ].rotation );
+			convertEuler( model.rigidBodies[ i ].rotation );
 
 		}
 
 		for ( var i = 0; i < model.metadata.constraintCount; i++ ) {
 
 			convertVector( model.constraints[ i ].position );
-			convertEyler( model.constraints[ i ].rotation );
+			convertEuler( model.constraints[ i ].rotation );
+			convertVectorRange( model.constraints[ i ].translationLimitation1, model.constraints[ i ].translationLimitation2 );
+			convertEulerRange( model.constraints[ i ].rotationLimitation1, model.constraints[ i ].rotationLimitation2 );
 
 		}
 
