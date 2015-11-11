@@ -849,8 +849,11 @@ THREE.Physics.Constraint.prototype = {
 		helper.setOriginFromArray3( form, params.position );
 		helper.setBasisFromArray3( form, params.rotation );
 
-		var formA = bodyA.body.getWorldTransform();
-		var formB = bodyB.body.getWorldTransform();
+		var formA = helper.allocTr();
+		var formB = helper.allocTr();
+
+		bodyA.body.getMotionState().getWorldTransform( formA );
+		bodyB.body.getMotionState().getWorldTransform( formB );
 
 		var formInverseA = helper.inverseTransform( formA );
 		var formInverseB = helper.inverseTransform( formB );
