@@ -75,35 +75,20 @@ THREE.Physics.prototype = {
 
 	update: function ( delta ) {
 
-		var dframe = ( delta / ( 1 / 60 ) ) | 0;
-		var g;
-		var stepTime = dframe * 1/60;
-		var maxStepNum = dframe;
-		var unitStep = 1/60;
+		var frame = 1 / 60;
+		var stepTime = delta;
+		var maxStepNum = ( ( delta / frame ) | 0 ) + 1;
+		var unitStep = frame;
 
-		// Note: sacrifice some precision for the performance
-		if( dframe >= 3 ) {
+		if ( maxStepNum > 3 ) {
 
-			maxStepNum = 2;
-			unitStep = 1/60*2;
-
-			g = this.world.getGravity();
-			g.setY( -10 * 10 / 2 );
-			this.world.setGravity( g );
+			maxStepNum = 3;
 
 		}
 
 		this.preSimulation();
 		this.world.stepSimulation( stepTime, maxStepNum, unitStep );
 		this.postSimulation();
-
-		if( dframe >= 3 ) {
-
-			g.setY( -10 * 10 );
-			this.world.setGravity( g );
-			Ammo.destroy( g ); // TODO: is this necessary?
-
-		}
 
 	},
 
@@ -661,19 +646,19 @@ THREE.Physics.RigidBody.prototype = {
 	preSimulation: function () {
 
 		// TODO: temporal workaround
-		if( this.params.boneIndex === -1 ) {
+		if ( this.params.boneIndex === -1 ) {
 
 			return;
 
 		}
 
-		if( this.params.type === 0 /* && this.params.boneIndex !== 0 */ ) {
+		if ( this.params.type === 0 /* && this.params.boneIndex !== 0 */ ) {
 
 			this.setTransformFromBone();
 
 		}
 
-		if( this.params.type === 2 /* && this.params.boneIndex !== 0 */ ) {
+		if ( this.params.type === 2 /* && this.params.boneIndex !== 0 */ ) {
 
 			this.setPositionFromBone();
 
@@ -681,7 +666,28 @@ THREE.Physics.RigidBody.prototype = {
 
 	},
 
-	setTransformFromBone: function () {
+	postSimulation: function () {
+
+		// TODO: temporal workaround
+		if ( this.params.type === 0 || this.params.boneIndex === -1 ) {
+
+			return;
+
+		}
+
+		this.updateBoneRotation();
+
+		if ( this.params.type === 1 ) {
+
+			this.updateBonePosition();
+
+		}
+
+		this.bone.updateMatrixWorld( true );
+
+	},
+
+	getBoneTransform: function () {
 
 		var helper = this.helper;
 		var p = this.bone.getWorldPosition();
@@ -693,12 +699,36 @@ THREE.Physics.RigidBody.prototype = {
 
 		var form = helper.multiplyTransforms( tr, this.boneOffsetForm );
 
+		helper.freeTr( tr );
+
+		return form;
+
+	},
+
+	getWorldTransformForBone: function () {
+
+		var helper = this.helper;
+
+		var tr = helper.allocTr();
+		this.body.getMotionState().getWorldTransform( tr );
+		var tr2 = helper.multiplyTransforms( tr, this.boneOffsetFormInverse );
+
+		helper.freeTr( tr );
+
+		return tr2;
+
+	},
+
+	setTransformFromBone: function () {
+
+		var helper = this.helper;
+		var form = this.getBoneTransform();
+
 		// TODO: temporal
 		//this.body.setWorldTransform( form );
 		this.body.setCenterOfMassTransform( form );
 		this.body.getMotionState().setWorldTransform( form );
 
-		helper.freeTr( tr );
 		helper.freeTr( form );
 
 	},
@@ -706,77 +736,66 @@ THREE.Physics.RigidBody.prototype = {
 	setPositionFromBone: function () {
 
 		var helper = this.helper;
-		var p = this.bone.getWorldPosition();
-		var q = this.bone.getWorldQuaternion();
+		var form = this.getBoneTransform();
 
 		var tr = helper.allocTr();
-		helper.setOriginFromArray3( tr, p.toArray() );
-		helper.setBasisFromArray4( tr, q.toArray() );
-
-		var form = helper.multiplyTransforms( tr, this.boneOffsetForm );
-
-		var tr2 = helper.allocTr();
-		this.body.getMotionState().getWorldTransform( tr2 );
-		helper.copyOrigin( tr2, form );
+		this.body.getMotionState().getWorldTransform( tr );
+		helper.copyOrigin( tr, form );
 
 		// TODO: temporal
-		//this.body.setWorldTransform( tr2 );
-		this.body.setCenterOfMassTransform( tr2 );
-		this.body.getMotionState().setWorldTransform( tr2 );
+		//this.body.setWorldTransform( tr );
+		this.body.setCenterOfMassTransform( tr );
+		this.body.getMotionState().setWorldTransform( tr );
 
 		helper.freeTr( tr );
-		helper.freeTr( tr2 );
 		helper.freeTr( form );
 
 	},
 
-	postSimulation: function () {
+	updateBoneRotation: function () {
+
+		this.bone.updateMatrixWorld( true );
 
 		var helper = this.helper;
 
-		// TODO: temporal workaround
-		if( this.params.type === 0 || this.params.boneIndex === -1 ) {
-
-			return;
-
-		}
-
-		var tr = helper.allocTr();
-		this.body.getMotionState().getWorldTransform( tr );
-		var tr2 = helper.multiplyTransforms( tr, this.boneOffsetFormInverse );
-		var q = helper.getBasis( tr2 );
+		var tr = this.getWorldTransformForBone();
+		var q = helper.getBasis( tr );
 
 		var tq = helper.allocThreeQuaternion();
 		var tq2 = helper.allocThreeQuaternion();
 
 		tq.set( q.x(), q.y(), q.z(), q.w() );
 		tq2.setFromRotationMatrix( this.bone.matrixWorld );
-		tq2.conjugate();
+		tq2.conjugate()
 		tq2.multiply( tq );
 
-		this.bone.quaternion.copy( tq2 );
-
-		if ( this.params.type === 1 ) {
-
-			var tv = helper.allocThreeVector3();
-
-			var o = helper.getOrigin( tr2 );
-			tv.set( o.x(), o.y(), o.z() );
-			var v = this.bone.worldToLocal( tv );
-			this.bone.position.add( v );
-
-			helper.freeThreeVector3( tv );
-
-		}
-
-		this.bone.updateMatrixWorld( true );
+		this.bone.quaternion.multiply( tq2 );
 
 		helper.freeThreeQuaternion( tq );
 		helper.freeThreeQuaternion( tq2 );
 
 		helper.freeQ( q );
 		helper.freeTr( tr );
-		helper.freeTr( tr2 );
+
+	},
+
+	updateBonePosition: function () {
+
+		var helper = this.helper;
+
+		var tr = this.getWorldTransformForBone();
+
+		var tv = helper.allocThreeVector3();
+
+		var o = helper.getOrigin( tr );
+		tv.set( o.x(), o.y(), o.z() );
+
+		var v = this.bone.worldToLocal( tv );
+		this.bone.position.add( v );
+
+		helper.freeThreeVector3( tv );
+
+		helper.freeTr( tr );
 
 	}
 
