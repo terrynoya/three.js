@@ -39,7 +39,7 @@
 		<script src="js/libs/ammo.js"></script>
 		<script src="js/loaders/MMDLoader.js"></script>
 		<script src="js/animation/CCDIKSolver.js"></script>
-		<script src="js/animation/Physics.js"></script>
+		<script src="js/animation/MMDPhysics.js"></script>
 
 		<script src="js/Detector.js"></script>
 		<script src="js/libs/stats.min.js"></script>
@@ -49,7 +49,13 @@
 			var container, stats;
 
 			var mesh, camera, mixer, scene, renderer;
-			var ikSolver, physics;
+			var ikSolver;
+
+			/*
+			 * Caution: Physics calculation is pretty heavy.
+			 *          It may be not acceptable for most mobile devices yet.
+			 */
+			var physics;
 
 			var mouseX = 0, mouseY = 0;
 
@@ -105,7 +111,7 @@
 					mixer.addAction( new THREE.AnimationAction( mesh.geometry.morphAnimations[ 0 ] ) ) ;
 
 					ikSolver = new THREE.CCDIKSolver( mesh );
-					physics = new THREE.Physics( mesh );
+					physics = new THREE.MMDPhysics( mesh );
 
 				}, onProgress, onError );
 

@@ -2,7 +2,7 @@
  * @author takahiro / https://github.com/takahirox
  *
  * Dependencies
- *  charset-encoder-js https://github.com/takahirox/charset-encoder-js
+ *  - charset-encoder-js https://github.com/takahirox/charset-encoder-js
  *
  *
  * This loader loads and parses PMD/PMX and VMD binary files
@@ -24,27 +24,26 @@
  *  http://gulshan-i-raz.geo.jp/labs/2012/10/17/pmx-format1/
  *
  * Model data requirements
- *  convert .tga files to .png files if exist. (Should I use THREE.TGALoader?)
- *  resize the texture image files to power_of_2*power_of_2
+ *  - convert .tga files to .png files if exist. (Should I use THREE.TGALoader?)
+ *  - resize the texture image files to power_of_2*power_of_2
  *
  *
  * TODO
- *  separate model/vmd loaders.
- *  multi vmd files support.
- *  edge(outline) support.
- *  culling support.
- *  toon(cel) shadering support.
- *  add-sphere-mapping support.
- *  physics support.
- *  camera motion in vmd support.
- *  light motion in vmd support.
- *  music support.
- *  make own shader for the performance and functionarity.
- *  SDEF support.
- *  uv/material/bone morphing support.
- *  tga file loading support.
- *  supply skinning support.
- *  shadow support.
+ *  - separate model/vmd loaders.
+ *  - multi vmd files support.
+ *  - edge(outline) support.
+ *  - culling support.
+ *  - toon(cel) shadering support.
+ *  - add-sphere-mapping support.
+ *  - camera motion in vmd support.
+ *  - light motion in vmd support.
+ *  - music support.
+ *  - make own shader for the performance and functionarity.
+ *  - SDEF support.
+ *  - uv/material/bone morphing support.
+ *  - tga file loading support.
+ *  - supply skinning support.
+ *  - shadow support.
  */
 
 THREE.MMDLoader = function ( showStatus, manager ) {
@@ -1843,6 +1842,11 @@ THREE.MMDLoader.prototype.createMesh = function ( model, vmd, texturePath, onPro
 
 			}
 
+			/*
+			 * RigidBody position parameter in PMX seems global position
+			 * while the one in PMD seems offset from corresponding bone.
+			 * So unify being offset.
+			 */
 			if ( model.metadata.format === 'pmx' ) {
 
 				if ( p.boneIndex !== -1 ) {
@@ -1877,16 +1881,16 @@ THREE.MMDLoader.prototype.createMesh = function ( model, vmd, texturePath, onPro
 			var bodyA = rigidBodies[ p.rigidBodyIndex1 ];
 			var bodyB = rigidBodies[ p.rigidBodyIndex2 ];
 
+			/*
+			 * Refer http://www20.atpages.jp/katwat/wp/?p=4135 
+			 * for what this is for
+			 */
 			if ( bodyA.type !== 0 && bodyB.type === 2 ) {
 
-				if ( bodyA.boneIndex   >  0 && bodyB.boneIndex   >  0 &&
-				     bodyA.boneIndex !== -1 && bodyB.boneIndex !== -1 ) {
+				if ( bodyA.boneIndex !== -1 && bodyB.boneIndex !== -1 &&
+				     model.bones[ bodyB.boneIndex ].parentIndex === bodyA.boneIndex ) {
 
-					if( model.bones[ bodyB.boneIndex ].parentIndex === bodyA.boneIndex ) {
-
-						bodyB.type = 1;
-
-					}
+					bodyB.type = 1;
 
 				}
 

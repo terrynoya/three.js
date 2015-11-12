@@ -2,13 +2,24 @@
  * @author takahiro / https://github.com/takahirox
  *
  * Dependencies
- *  Ammo.js            https://github.com/kripken/ammo.js
+ *  - Ammo.js https://github.com/kripken/ammo.js
+ *
+ *
+ * MMD specific Physics class.
+ *
+ * See THREE.MMDLoader for the passed parameter list of RigidBody/Constraint.
+ *
+ *
+ * TODO
+ *  - use Physijs http://chandlerprall.github.io/Physijs/
+ *    and improve the performance by making use of Web worker.
+ *  - if possible, make this class being non-MMD specific.
  */
 
-THREE.Physics = function ( mesh ) {
+THREE.MMDPhysics = function ( mesh ) {
 
 	this.mesh = mesh;
-	this.helper = new THREE.Physics.PhysicsHelper();
+	this.helper = new THREE.MMDPhysics.PhysicsHelper();
 
 	this.world = null;
 	this.bodies = [];
@@ -18,9 +29,9 @@ THREE.Physics = function ( mesh ) {
 
 };
 
-THREE.Physics.prototype = {
+THREE.MMDPhysics.prototype = {
 
-	constructor: THREE.Physics,
+	constructor: THREE.MMDPhysics,
 
 	init: function () {
 
@@ -38,7 +49,7 @@ THREE.Physics.prototype = {
 		var cache = new Ammo.btDbvtBroadphase();
 		var solver = new Ammo.btSequentialImpulseConstraintSolver();
 		var world = new Ammo.btDiscreteDynamicsWorld( dispatcher, cache, solver, config );
-		world.setGravity( new Ammo.btVector3( 0, -10*10, 0 ) );
+		world.setGravity( new Ammo.btVector3( 0, -10 * 10, 0 ) );
 		this.world = world;
 
 	},
@@ -49,7 +60,7 @@ THREE.Physics.prototype = {
 
 		for ( var i = 0; i < bodies.length; i++ ) {
 
-			var b = new THREE.Physics.RigidBody( this.mesh, this.world, bodies[ i ], this.helper );
+			var b = new THREE.MMDPhysics.RigidBody( this.mesh, this.world, bodies[ i ], this.helper );
 			this.bodies.push( b );
 
 		}
@@ -65,7 +76,7 @@ THREE.Physics.prototype = {
 			var params = constraints[ i ];
 			var bodyA = this.bodies[ params.rigidBodyIndex1 ];
 			var bodyB = this.bodies[ params.rigidBodyIndex2 ];
-			var c = new THREE.Physics.Constraint( this.mesh, this.world, bodyA, bodyB, params, this.helper );
+			var c = new THREE.MMDPhysics.Constraint( this.mesh, this.world, bodyA, bodyB, params, this.helper );
 			this.constraints.push( c );
 
 		}
@@ -75,10 +86,9 @@ THREE.Physics.prototype = {
 
 	update: function ( delta ) {
 
-		var frame = 1 / 60;
+		var unitStep = 1 / 60;
 		var stepTime = delta;
-		var maxStepNum = ( ( delta / frame ) | 0 ) + 1;
-		var unitStep = frame;
+		var maxStepNum = ( ( delta / unitStep ) | 0 ) + 1;
 
 		if ( maxStepNum > 3 ) {
 
@@ -86,27 +96,27 @@ THREE.Physics.prototype = {
 
 		}
 
-		this.preSimulation();
+		this.updateRigidBodies();
 		this.world.stepSimulation( stepTime, maxStepNum, unitStep );
-		this.postSimulation();
+		this.updateBones();
 
 	},
 
-	preSimulation: function () {
+	updateRigidBodies: function () {
 
 		for ( var i = 0; i < this.bodies.length; i++ ) {
 
-			this.bodies[ i ].preSimulation();
+			this.bodies[ i ].updateFromBone();
 
 		}
 
 	},
 
-	postSimulation: function () {
+	updateBones: function () {
 
 		for ( var i = 0; i < this.bodies.length; i++ ) {
 
-			this.bodies[ i ].postSimulation();
+			this.bodies[ i ].updateBone();
 
 		}
 
@@ -116,7 +126,7 @@ THREE.Physics.prototype = {
 
 		for ( var i = 0; i < this.bodies.length; i++ ) {
 
-			this.bodies[ i ].setTransformFromBone();
+			this.bodies[ i ].reset();
 
 		}
 
@@ -124,91 +134,100 @@ THREE.Physics.prototype = {
 
 };
 
-THREE.Physics.PhysicsHelper = function () {
+/**
+ * This helper class responsibilies are
+ *
+ * 1. manage Ammo.js and Three.js object resources and
+ *    improve the performance and the memory consumption by
+ *    reusing objects.
+ *
+ * 2. provide simple Ammo object operations.
+ */
+THREE.MMDPhysics.PhysicsHelper = function () {
 
 	// for Three.js
-	this.tv3s = [];
-	this.tm4s = [];
-	this.tqs = [];
+	this.threeVector3s = [];
+	this.threeMatrix4s = [];
+	this.threeQuaternions = [];
 
 	// for Ammo.js
-	this.trs = [];
-	this.qs = [];
-	this.vs = [];
+	this.transforms = [];
+	this.quaternios = [];
+	this.vector3s = [];
 
 };
 
-THREE.Physics.PhysicsHelper.prototype = {
+THREE.MMDPhysics.PhysicsHelper.prototype = {
 
 	allocThreeVector3: function () {
 
-		return ( this.tv3s.length > 0 ) ? this.tv3s.pop() : new THREE.Vector3();
+		return ( this.threeVector3s.length > 0 ) ? this.threeVector3s.pop() : new THREE.Vector3();
 
 	},
 
 	freeThreeVector3: function ( v ) {
 
-		this.tv3s.push( v );
+		this.threeVector3s.push( v );
 
 	},
 
 	allocThreeMatrix4: function () {
 
-		return ( this.tm4s.length > 0 ) ? this.tm4s.pop() : new THREE.Matrix4();
+		return ( this.threeMatrix4s.length > 0 ) ? this.threeMatrix4s.pop() : new THREE.Matrix4();
 
 	},
 
 	freeThreeMatrix4: function ( m ) {
 
-		this.tm4s.push( m );
+		this.threeMatrix4s.push( m );
 
 	},
 
 	allocThreeQuaternion: function () {
 
-		return ( this.tm4s.length > 0 ) ? this.tm4s.pop() : new THREE.Quaternion();
+		return ( this.threeQuaternions.length > 0 ) ? this.threeQuaternions.pop() : new THREE.Quaternion();
 
 	},
 
 	freeThreeQuaternion: function ( q ) {
 
-		this.tqs.push( q );
+		this.threeQuaternions.push( q );
 
 	},
 
-	allocTr: function () {
+	allocTransform: function () {
 
-		return ( this.trs.length > 0 ) ? this.trs.pop() : new Ammo.btTransform();
-
-	},
-
-	freeTr: function ( t ) {
-
-		this.trs.push( t );
+		return ( this.transforms.length > 0 ) ? this.transforms.pop() : new Ammo.btTransform();
 
 	},
 
-	allocQ: function () {
+	freeTransform: function ( t ) {
 
-		return ( this.qs.length > 0 ) ? this.qs.pop() : new Ammo.btQuaternion();
-
-	},
-
-	freeQ: function ( q ) {
-
-		this.qs.push( q );
+		this.transforms.push( t );
 
 	},
 
-	allocV: function () {
+	allocQuaternion: function () {
 
-		return ( this.vs.length > 0 ) ? this.vs.pop() : new Ammo.btVector3();
+		return ( this.quaternions.length > 0 ) ? this.quaternions.pop() : new Ammo.btQuaternion();
 
 	},
 
-	freeV: function ( v ) {
+	freeQuaternion: function ( q ) {
 
-		this.vs.push( v );
+		this.quaternions.push( q );
+
+	},
+
+	allocVector3: function () {
+
+		return ( this.vector3s.length > 0 ) ? this.vector3s.pop() : new Ammo.btVector3();
+
+	},
+
+	freeVector3: function ( v ) {
+
+		this.vector3s.push( v );
 
 	},
 
@@ -220,7 +239,7 @@ THREE.Physics.PhysicsHelper.prototype = {
 
 	getBasis: function ( t ) {
 
-		var q = this.allocQ();
+		var q = this.allocQuaternion();
 		t.getBasis().getRotation( q );
 		return q;
 
@@ -230,7 +249,7 @@ THREE.Physics.PhysicsHelper.prototype = {
 
 		var q = this.getBasis( t );
 		var m = this.quaternionToMatrix3( q );
-		this.freeQ( q );
+		this.freeQuaternion( q );
 		return m;
 
 	},
@@ -264,7 +283,7 @@ THREE.Physics.PhysicsHelper.prototype = {
 
 		var q = this.matrix3ToQuaternion( m );
 		this.setBasis( t, q );
-		this.freeQ( q );
+		this.freeQuaternion( q );
 
 	},
 
@@ -284,13 +303,13 @@ THREE.Physics.PhysicsHelper.prototype = {
 
 		var q = this.array4ToQuaternion( a );
 		this.setBasis( t, q );
-		this.freeQ( q );
+		this.freeQuaternion( q );
 
 	},
 
 	array4ToQuaternion: function( a ) {
 
-		var q = this.allocQ();
+		var q = this.allocQuaternion();
 		q.setX( a[ 0 ] );
 		q.setY( a[ 1 ] );
 		q.setZ( a[ 2 ] );
@@ -301,7 +320,7 @@ THREE.Physics.PhysicsHelper.prototype = {
 
 	multiplyTransforms: function ( t1, t2 ) {
 
-		var t = this.allocTr();
+		var t = this.allocTransform();
 		this.setIdentity( t );
 
 		var m1 = this.getBasisAsMatrix3( t1 );
@@ -317,8 +336,8 @@ THREE.Physics.PhysicsHelper.prototype = {
 		var m3 = this.multiplyMatrices3( m1, m2 );
 		this.setBasisFromMatrix3( t, m3 );
 
-		this.freeV( v1 );
-		this.freeV( v2 );
+		this.freeVector3( v1 );
+		this.freeVector3( v2 );
 
 		return t;
 
@@ -326,7 +345,7 @@ THREE.Physics.PhysicsHelper.prototype = {
 
 	inverseTransform: function ( t ) {
 
-		var t2 = this.allocTr();
+		var t2 = this.allocTranform();
 
 		var m1 = this.getBasisAsMatrix3( t );
 		var o = this.getOrigin( t );
@@ -338,8 +357,8 @@ THREE.Physics.PhysicsHelper.prototype = {
 		this.setOrigin( t2, v2 );
 		this.setBasisFromMatrix3( t2, m2 );
 
-		this.freeV( v1 );
-		this.freeV( v2 );
+		this.freeVector3( v1 );
+		this.freeVector3( v2 );
 
 		return t2;
 
@@ -367,12 +386,12 @@ THREE.Physics.PhysicsHelper.prototype = {
 		m3[ 7 ] = this.dotVectors3( v12, v21 );
 		m3[ 8 ] = this.dotVectors3( v12, v22 );
 
-		this.freeV( v10 );
-		this.freeV( v11 );
-		this.freeV( v12 );
-		this.freeV( v20 );
-		this.freeV( v21 );
-		this.freeV( v22 );
+		this.freeVector3( v10 );
+		this.freeVector3( v11 );
+		this.freeVector3( v12 );
+		this.freeVector3( v20 );
+		this.freeVector3( v21 );
+		this.freeVector3( v22 );
 
 		return m3;
 
@@ -380,7 +399,7 @@ THREE.Physics.PhysicsHelper.prototype = {
 
 	addVector3: function( v1, v2 ) {
 
-		var v = this.allocV();
+		var v = this.allocVector3();
 		v.setValue( v1.x() + v2.x(), v1.y() + v2.y(), v1.z() + v2.z() );
 		return v;
 
@@ -394,7 +413,7 @@ THREE.Physics.PhysicsHelper.prototype = {
 
 	rowOfMatrix3: function( m, i ) {
 
-		var v = this.allocV();
+		var v = this.allocVector3();
 		v.setValue( m[ i * 3 + 0 ], m[ i * 3 + 1 ], m[ i * 3 + 2 ] );
 		return v;
 
@@ -402,7 +421,7 @@ THREE.Physics.PhysicsHelper.prototype = {
 
 	columnOfMatrix3: function( m, i ) {
 
-		var v = this.allocV();
+		var v = this.allocVector3();
 		v.setValue( m[ i + 0 ], m[ i + 3 ], m[ i + 6 ] );
 		return v;
 
@@ -410,7 +429,7 @@ THREE.Physics.PhysicsHelper.prototype = {
 
 	negativeVector3: function( v ) {
 
-		var v2 = this.allocV();
+		var v2 = this.allocVector3();
 		v2.setValue( -v.x(), -v.y(), -v.z() );
 		return v2;
 
@@ -418,7 +437,7 @@ THREE.Physics.PhysicsHelper.prototype = {
 
 	multiplyMatrix3ByVector3: function ( m, v ) {
 
-		var v4 = this.allocV();
+		var v4 = this.allocVector3();
 
 		var v0 = this.rowOfMatrix3( m, 0 );
 		var v1 = this.rowOfMatrix3( m, 1 );
@@ -429,9 +448,9 @@ THREE.Physics.PhysicsHelper.prototype = {
 
 		v4.setValue( x, y, z );
 
-		this.freeV( v0 );
-		this.freeV( v1 );
-		this.freeV( v2 );
+		this.freeVector3( v0 );
+		this.freeVector3( v1 );
+		this.freeVector3( v2 );
 
 		return v4;
 
@@ -527,7 +546,7 @@ THREE.Physics.PhysicsHelper.prototype = {
 
 		}
 
-		var q = this.allocQ();
+		var q = this.allocQuaternion();
 		q.setX( x );
 		q.setY( y );
 		q.setZ( z );
@@ -538,7 +557,7 @@ THREE.Physics.PhysicsHelper.prototype = {
 
 };
 
-THREE.Physics.RigidBody = function ( mesh, world, params, helper ) {
+THREE.MMDPhysics.RigidBody = function ( mesh, world, params, helper ) {
 
 	this.mesh  = mesh;
 	this.world = world;
@@ -554,9 +573,9 @@ THREE.Physics.RigidBody = function ( mesh, world, params, helper ) {
 
 };
 
-THREE.Physics.RigidBody.prototype = {
+THREE.MMDPhysics.RigidBody.prototype = {
 
-	constructor: THREE.Physics.RigidBody,
+	constructor: THREE.MMDPhysics.RigidBody,
 
 	init: function () {
 
@@ -587,7 +606,7 @@ THREE.Physics.RigidBody.prototype = {
 
 		var shape = generateShape( params );
 		var weight = ( params.type === 0 ) ? 0 : params.weight;
-		var localInertia = helper.allocV();
+		var localInertia = helper.allocVector3();
 		localInertia.setValue( 0, 0, 0 );
 
 		if( weight !== 0 ) {
@@ -596,12 +615,12 @@ THREE.Physics.RigidBody.prototype = {
 
 		}
 
-		var boneOffsetForm = helper.allocTr();
+		var boneOffsetForm = helper.allocTransform();
 		helper.setIdentity( boneOffsetForm );
 		helper.setOriginFromArray3( boneOffsetForm, params.position );
 		helper.setBasisFromArray3( boneOffsetForm, params.rotation );
 
-		var boneForm = helper.allocTr();
+		var boneForm = helper.allocTransform();
 		helper.setIdentity( boneForm );
 		helper.setOriginFromArray3( boneForm, bone.getWorldPosition().toArray() );
 
@@ -631,9 +650,9 @@ THREE.Physics.RigidBody.prototype = {
 		this.boneOffsetForm = boneOffsetForm;
 		this.boneOffsetFormInverse = helper.inverseTransform( boneOffsetForm );
 
-		helper.freeV( localInertia );
-		helper.freeTr( form );
-		helper.freeTr( boneForm );
+		helper.freeVector3( localInertia );
+		helper.freeTransform( form );
+		helper.freeTransform( boneForm );
 
 	},
 
@@ -643,22 +662,21 @@ THREE.Physics.RigidBody.prototype = {
 
 	},
 
-	preSimulation: function () {
+	updateFromBone: function () {
 
-		// TODO: temporal workaround
 		if ( this.params.boneIndex === -1 ) {
 
 			return;
 
 		}
 
-		if ( this.params.type === 0 /* && this.params.boneIndex !== 0 */ ) {
+		if ( this.params.type === 0 ) {
 
 			this.setTransformFromBone();
 
 		}
 
-		if ( this.params.type === 2 /* && this.params.boneIndex !== 0 */ ) {
+		if ( this.params.type === 2 ) {
 
 			this.setPositionFromBone();
 
@@ -666,9 +684,8 @@ THREE.Physics.RigidBody.prototype = {
 
 	},
 
-	postSimulation: function () {
+	updateBone: function () {
 
-		// TODO: temporal workaround
 		if ( this.params.type === 0 || this.params.boneIndex === -1 ) {
 
 			return;
@@ -693,13 +710,13 @@ THREE.Physics.RigidBody.prototype = {
 		var p = this.bone.getWorldPosition();
 		var q = this.bone.getWorldQuaternion();
 
-		var tr = helper.allocTr();
+		var tr = helper.allocTransform();
 		helper.setOriginFromArray3( tr, p.toArray() );
 		helper.setBasisFromArray4( tr, q.toArray() );
 
 		var form = helper.multiplyTransforms( tr, this.boneOffsetForm );
 
-		helper.freeTr( tr );
+		helper.freeTransform( tr );
 
 		return form;
 
@@ -709,11 +726,11 @@ THREE.Physics.RigidBody.prototype = {
 
 		var helper = this.helper;
 
-		var tr = helper.allocTr();
+		var tr = helper.allocTransform();
 		this.body.getMotionState().getWorldTransform( tr );
 		var tr2 = helper.multiplyTransforms( tr, this.boneOffsetFormInverse );
 
-		helper.freeTr( tr );
+		helper.freeTransform( tr );
 
 		return tr2;
 
@@ -724,12 +741,12 @@ THREE.Physics.RigidBody.prototype = {
 		var helper = this.helper;
 		var form = this.getBoneTransform();
 
-		// TODO: temporal
+		// TODO: check the most appropriate way to set
 		//this.body.setWorldTransform( form );
 		this.body.setCenterOfMassTransform( form );
 		this.body.getMotionState().setWorldTransform( form );
 
-		helper.freeTr( form );
+		helper.freeTransform( form );
 
 	},
 
@@ -738,17 +755,17 @@ THREE.Physics.RigidBody.prototype = {
 		var helper = this.helper;
 		var form = this.getBoneTransform();
 
-		var tr = helper.allocTr();
+		var tr = helper.allocTransform();
 		this.body.getMotionState().getWorldTransform( tr );
 		helper.copyOrigin( tr, form );
 
-		// TODO: temporal
+		// TODO: check the most appropriate way to set
 		//this.body.setWorldTransform( tr );
 		this.body.setCenterOfMassTransform( tr );
 		this.body.getMotionState().setWorldTransform( tr );
 
-		helper.freeTr( tr );
-		helper.freeTr( form );
+		helper.freeTransform( tr );
+		helper.freeTransform( form );
 
 	},
 
@@ -761,21 +778,21 @@ THREE.Physics.RigidBody.prototype = {
 		var tr = this.getWorldTransformForBone();
 		var q = helper.getBasis( tr );
 
-		var tq = helper.allocThreeQuaternion();
-		var tq2 = helper.allocThreeQuaternion();
+		var thQ = helper.allocThreeQuaternion();
+		var thQ2 = helper.allocThreeQuaternion();
 
-		tq.set( q.x(), q.y(), q.z(), q.w() );
-		tq2.setFromRotationMatrix( this.bone.matrixWorld );
-		tq2.conjugate()
-		tq2.multiply( tq );
+		thQ.set( q.x(), q.y(), q.z(), q.w() );
+		thQ2.setFromRotationMatrix( this.bone.matrixWorld );
+		thQ2.conjugate()
+		thQ2.multiply( thQ );
 
-		this.bone.quaternion.multiply( tq2 );
+		this.bone.quaternion.multiply( thQ2 );
 
-		helper.freeThreeQuaternion( tq );
-		helper.freeThreeQuaternion( tq2 );
+		helper.freeThreeQuaternion( thQ );
+		helper.freeThreeQuaternion( thQ2 );
 
-		helper.freeQ( q );
-		helper.freeTr( tr );
+		helper.freeQuaternion( q );
+		helper.freeTransform( tr );
 
 	},
 
@@ -785,23 +802,23 @@ THREE.Physics.RigidBody.prototype = {
 
 		var tr = this.getWorldTransformForBone();
 
-		var tv = helper.allocThreeVector3();
+		var thV = helper.allocThreeVector3();
 
 		var o = helper.getOrigin( tr );
-		tv.set( o.x(), o.y(), o.z() );
+		thV.set( o.x(), o.y(), o.z() );
 
-		var v = this.bone.worldToLocal( tv );
+		var v = this.bone.worldToLocal( thV );
 		this.bone.position.add( v );
 
-		helper.freeThreeVector3( tv );
+		helper.freeThreeVector3( thV );
 
-		helper.freeTr( tr );
+		helper.freeTransform( tr );
 
 	}
 
 };
 
-THREE.Physics.Constraint = function ( mesh, world, bodyA, bodyB, params, helper ) {
+THREE.MMDPhysics.Constraint = function ( mesh, world, bodyA, bodyB, params, helper ) {
 
 	this.mesh  = mesh;
 	this.world = world;
@@ -811,16 +828,14 @@ THREE.Physics.Constraint = function ( mesh, world, bodyA, bodyB, params, helper 
 	this.helper = helper;
 
 	this.constraint = null;
-	this.boneOffsetForm = null;
-	this.boneOffsetFormInverse = null;
 
 	this.init();
 
 };
 
-THREE.Physics.Constraint.prototype = {
+THREE.MMDPhysics.Constraint.prototype = {
 
-	constructor: THREE.Physics.Constraint,
+	constructor: THREE.MMDPhysics.Constraint,
 
 	init: function () {
 
@@ -829,13 +844,13 @@ THREE.Physics.Constraint.prototype = {
 		var bodyA = this.bodyA;
 		var bodyB = this.bodyB;
 
-		var form = helper.allocTr();
+		var form = helper.allocTransform();
 		helper.setIdentity( form );
 		helper.setOriginFromArray3( form, params.position );
 		helper.setBasisFromArray3( form, params.rotation );
 
-		var formA = helper.allocTr();
-		var formB = helper.allocTr();
+		var formA = helper.allocTransform();
+		var formB = helper.allocTransform();
 
 		bodyA.body.getMotionState().getWorldTransform( formA );
 		bodyB.body.getMotionState().getWorldTransform( formB );
@@ -848,10 +863,10 @@ THREE.Physics.Constraint.prototype = {
 
 		var constraint = new Ammo.btGeneric6DofSpringConstraint( bodyA.body, bodyB.body, formA2, formB2, true );
 
-		var lll = helper.allocV();
-		var lul = helper.allocV();
-		var all = helper.allocV();
-		var aul = helper.allocV();
+		var lll = helper.allocVector3();
+		var lul = helper.allocVector3();
+		var all = helper.allocVector3();
+		var aul = helper.allocVector3();
 
 		lll.setValue( params.translationLimitation1[ 0 ],
 		              params.translationLimitation1[ 1 ],
@@ -896,17 +911,17 @@ THREE.Physics.Constraint.prototype = {
 		this.world.addConstraint( constraint, true );
 		this.constraint = constraint;
 
-		helper.freeTr( form );
-		helper.freeTr( formA );
-		helper.freeTr( formB );
-		helper.freeTr( formInverseA );
-		helper.freeTr( formInverseB );
-		helper.freeTr( formA2 );
-		helper.freeTr( formB2 );
-		helper.freeV( lll );
-		helper.freeV( lul );
-		helper.freeV( all );
-		helper.freeV( aul );
+		helper.freeTransform( form );
+		helper.freeTransform( formA );
+		helper.freeTransform( formB );
+		helper.freeTransform( formInverseA );
+		helper.freeTransform( formInverseB );
+		helper.freeTransform( formA2 );
+		helper.freeTransform( formB2 );
+		helper.freeVector3( lll );
+		helper.freeVector3( lul );
+		helper.freeVector3( all );
+		helper.freeVector3( aul );
 
 	}
 
