@@ -1843,6 +1843,20 @@ THREE.MMDLoader.prototype.createMesh = function ( model, vmd, texturePath, onPro
 
 			}
 
+			if ( model.metadata.format === 'pmx' ) {
+
+				if ( p.boneIndex !== -1 ) {
+
+					var bone = model.bones[ p.boneIndex ];
+					p.position[ 0 ] -= bone.position[ 0 ];
+					p.position[ 1 ] -= bone.position[ 1 ];
+					p.position[ 2 ] -= bone.position[ 2 ];
+
+
+				}
+
+			}
+
 			rigidBodies.push( p );
 
 		}
