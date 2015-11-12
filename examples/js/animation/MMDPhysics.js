@@ -152,7 +152,7 @@ THREE.MMDPhysics.PhysicsHelper = function () {
 
 	// for Ammo.js
 	this.transforms = [];
-	this.quaternios = [];
+	this.quaternions = [];
 	this.vector3s = [];
 
 };
@@ -345,7 +345,7 @@ THREE.MMDPhysics.PhysicsHelper.prototype = {
 
 	inverseTransform: function ( t ) {
 
-		var t2 = this.allocTranform();
+		var t2 = this.allocTransform();
 
 		var m1 = this.getBasisAsMatrix3( t );
 		var o = this.getOrigin( t );
