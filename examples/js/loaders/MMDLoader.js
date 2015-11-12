@@ -1462,13 +1462,6 @@ THREE.MMDLoader.prototype.createMesh = function ( model, vmd, texturePath, onPro
 			var b = model.bones[ i ];
 
 			bone.parent = b.parentIndex;
-
-			if ( model.metadata.format === 'pmd' ) {
-
-				bone.parent = ( b.parentIndex === 0xFFFF ) ? -1 : b.parentIndex;
-
-			}
-
 			bone.name = b.name;
 			bone.pos = [ b.position[ 0 ], b.position[ 1 ], b.position[ 2 ] ];
 			bone.rotq = [ 0, 0, 0, 1 ];
@@ -1865,6 +1858,24 @@ THREE.MMDLoader.prototype.createMesh = function ( model, vmd, texturePath, onPro
 
 				var key = keys[ j ];
 				p[ key ] = c[ key ];
+
+			}
+
+			var bodyA = rigidBodies[ p.rigidBodyIndex1 ];
+			var bodyB = rigidBodies[ p.rigidBodyIndex2 ];
+
+			if ( bodyA.type !== 0 && bodyB.type === 2 ) {
+
+				if ( bodyA.boneIndex   >  0 && bodyB.boneIndex   >  0 &&
+				     bodyA.boneIndex !== -1 && bodyB.boneIndex !== -1 ) {
+
+					if( model.bones[ bodyB.boneIndex ].parentIndex === bodyA.boneIndex ) {
+
+						bodyB.type = 1;
+
+					}
+
+				}
 
 			}
 

@@ -829,21 +829,6 @@ THREE.Physics.Constraint.prototype = {
 		var bodyA = this.bodyA;
 		var bodyB = this.bodyB;
 
-		if ( bodyA.params.type !== 0 && bodyB.params.type === 2 ) {
-
-			if ( bodyA.params.boneIndex   >  0 && bodyB.params.boneIndex   >  0 &&
-			     bodyA.params.boneIndex !== -1 && bodyB.params.boneIndex !== -1 ) {
-
-				if( bodyB.bone.parent === bodyA.bone ) {
-
-					bodyB.params.type = 1;
-
-				}
-
-			}
-
-		}
-
 		var form = helper.allocTr();
 		helper.setIdentity( form );
 		helper.setOriginFromArray3( form, params.position );
