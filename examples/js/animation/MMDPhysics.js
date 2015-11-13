@@ -130,6 +130,16 @@ THREE.MMDPhysics.prototype = {
 
 		}
 
+	},
+
+	warmup: function ( cycles ) {
+
+		for ( var i = 0; i < cycles; i++ ) {
+
+			this.update( 1 );
+
+		}
+
 	}
 
 };
