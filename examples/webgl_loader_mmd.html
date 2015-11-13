@@ -112,6 +112,7 @@
 
 					ikSolver = new THREE.CCDIKSolver( mesh );
 					physics = new THREE.MMDPhysics( mesh );
+					physics.warmup( 10 );
 
 				}, onProgress, onError );
 
