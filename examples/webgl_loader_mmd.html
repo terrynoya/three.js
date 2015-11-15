@@ -37,6 +37,7 @@
 
 		<script src="js/libs/charsetencoder.min.js"></script>
 		<script src="js/libs/ammo.js"></script>
+		<script src="js/loaders/TGALoader.js"></script>
 		<script src="js/loaders/MMDLoader.js"></script>
 		<script src="js/animation/CCDIKSolver.js"></script>
 		<script src="js/animation/MMDPhysics.js"></script>
@@ -48,14 +49,13 @@
 
 			var container, stats;
 
-			var mesh, camera, mixer, scene, renderer;
-			var ikSolver;
+			var mesh, camera, scene, renderer;
+			var helper;
 
 			/*
 			 * Caution: Physics calculation is pretty heavy.
 			 *          It may be not acceptable for most mobile devices yet.
 			 */
-			var physics;
 
 			var mouseX = 0, mouseY = 0;
 
@@ -101,18 +101,14 @@
 
 				var loader = new THREE.MMDLoader();
 				loader.load( 'models/mmd/miku/miku_v2.pmd', 'models/mmd/vmd/wavefile_v2.vmd', function ( object ) {
+//				loader.load( 'models/mmd/miku_low/miku.pmx', 'models/mmd/vmd/wavefile_v2.vmd', function ( object ) {
+//				loader.load( 'models/mmd/MarisaV12/marisa.pmx', 'models/mmd/vmd/wavefile_v2.vmd', function ( object ) {
 
 					mesh = object;
 					mesh.position.y = -10;
 					scene.add( mesh );
 
-					mixer = new THREE.AnimationMixer( mesh );
-					mixer.addAction( new THREE.AnimationAction( mesh.geometry.animations[ 0 ] ) );
-					mixer.addAction( new THREE.AnimationAction( mesh.geometry.morphAnimations[ 0 ] ) ) ;
-
-					ikSolver = new THREE.CCDIKSolver( mesh );
-					physics = new THREE.MMDPhysics( mesh );
-					physics.warmup( 10 );
+					helper = new THREE.MMDHelper( mesh, renderer );
 
 				}, onProgress, onError );
 
@@ -167,16 +163,16 @@
 
 				camera.lookAt( scene.position );
 
-				if( mesh ) {
+				if ( mesh ) {
 
-					var delta = clock.getDelta();
-					mixer.update( delta );
-					ikSolver.update();
-					physics.update( delta );
+					helper.animate( clock.getDelta() );
+					helper.render( scene, camera );
+
+				} else {
+
+					renderer.render( scene, camera );
 
 				}
-
-				renderer.render( scene, camera );
 
 			}
 
