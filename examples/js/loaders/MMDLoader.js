@@ -31,11 +31,9 @@
  * TODO
  *  - separate model/vmd loaders.
  *  - multi vmd files support.
- *  - toon(cel) shadering support.
  *  - camera motion in vmd support.
  *  - light motion in vmd support.
  *  - music support.
- *  - make own shader for the performance and functionarity.
  *  - SDEF support.
  *  - uv/material/bone morphing support.
  *  - supply skinning support.
@@ -46,6 +44,7 @@ THREE.MMDLoader = function ( showStatus, manager ) {
 
 	THREE.Loader.call( this, showStatus );
 	this.manager = ( manager !== undefined ) ? manager : THREE.DefaultLoadingManager;
+	this.defaultTexturePath = './models/mmd/default/';
 
 };
 
@@ -63,6 +62,12 @@ THREE.MMDLoader.prototype.extractExtension = function ( url ) {
 	}
 
 	return url.slice( index + 1 );
+
+};
+
+THREE.MMDLoader.prototype.setDefualtTexturePath = function ( path ) {
+
+	this.defaultTexturePath = path;
 
 };
 
@@ -233,7 +238,7 @@ THREE.MMDLoader.prototype.parsePmd = function ( buffer ) {
 			p.shininess = dv.getFloat32();
 			p.specular = dv.getFloat32Array( 3 );
 			p.emissive = dv.getFloat32Array( 3 );
-			p.toonIndex = dv.getUint8();
+			p.toonIndex = dv.getInt8();
 			p.edgeFlag = dv.getUint8();
 			p.faceCount = dv.getUint32() / 3;
 			p.fileName = dv.getChars( 20 );
@@ -827,11 +832,11 @@ THREE.MMDLoader.prototype.parsePmx = function ( buffer ) {
 
 			if ( p.toonFlag === 0 ) {
 
-				p.toonTextureIndex = dv.getNumber( pmx.metadata.textureIndexSize );
+				p.toonIndex = dv.getNumber( pmx.metadata.textureIndexSize );
 
 			} else if ( p.toonFlag === 1 ) {
 
-				p.toonTextureIndex = dv.getUint8();
+				p.toonIndex = dv.getInt8();
 
 			} else {
 
@@ -1675,7 +1680,8 @@ THREE.MMDLoader.prototype.createMesh = function ( model, vmd, texturePath, onPro
 
 			}
 
-			var fullPath = texturePath + filePath;
+			var directoryPath = ( params.defaultTexturePath === true ) ? scope.defaultTexturePath : texturePath;
+			var fullPath = directoryPath + filePath;
 
 			var loader = THREE.Loader.Handlers.get( fullPath );
 
@@ -1879,15 +1885,68 @@ THREE.MMDLoader.prototype.createMesh = function ( model, vmd, texturePath, onPro
 
 			if ( model.metadata.format === 'pmd' ) {
 
+				function isDefaultToonTexture ( n ) {
+
+					if ( n.length !== 10 ) {
+
+						return false;
+
+					}
+
+					var prefix = n.slice( 0, 4 );
+					var num = parseInt( n.slice( 4, 6 ) );
+					var suffix = n.slice( 6, 10 );
+
+					if ( prefix === 'toon' && suffix === '.bmp' && ! isNaN( num ) && num >= 0 && num <= 10 ) {
+
+						return true;
+
+					} else {
+
+						return false;
+
+					}
+
+				};
+
 				m.uniforms.outlineThickness.value = p2.edgeFlag === 1 ? 0.003 : 0.0;
 				m.uniforms.outlineColor.value = new THREE.Color( 0.0, 0.0, 0.0 );
 				m.uniforms.outlineAlpha.value = 1.0;
+				m.uniforms.toonMap.value = textures[ p2.toonIndex ];
+				m.uniforms.celShading.value = 1;
+
+				// temporal workaround
+				// TODO: handle correctly
+				var n = model.toonTextures[ p2.toonIndex === -1 ? 0 : p2.toonIndex ].fileName;
+				var uuid = loadTexture( n, { defaultTexturePath: isDefaultToonTexture( n ) } );
+				m.uniforms.toonMap.value = textures[ uuid ];
 
 			} else {
 
-				m.uniforms.outlineThickness.value = p2.edgeSize / 1000;
+				m.uniforms.outlineThickness.value = p2.edgeSize / 300;
 				m.uniforms.outlineColor.value = new THREE.Color( p2.edgeColor[ 0 ], p2.edgeColor[ 1 ], p2.edgeColor[ 2 ] );
 				m.uniforms.outlineAlpha.value = p2.edgeColor[ 3 ];
+				m.uniforms.celShading.value = 1;
+
+				// temporal workaround
+				// TODO: handle correctly
+				var index = p2.toonIndex === -1 ? -1 : p2.toonIndex;
+				var flag = p2.toonIndex === -1 ? 1 : p2.toonFlag;
+
+				if ( flag === 0 ) {
+
+					var n = model.textures[ index ];
+					var uuid = loadTexture( n );
+					m.uniforms.toonMap.value = textures[ uuid ];
+
+				} else {
+
+					var num = index + 1;
+					var fileName = 'toon' + ( num < 10 ? '0' + num : num ) + '.bmp';
+					var uuid = loadTexture( fileName, { defaultTexturePath: true } );
+					m.uniforms.toonMap.value = textures[ uuid ];
+
+				}
 
 			}
 
@@ -2705,7 +2764,9 @@ THREE.ShaderLib[ 'mmd' ] = {
 			"outlineDrawing"  : { type: "i", value: 0 },
 			"outlineThickness": { type: "f", value: 0.0 },
 			"outlineColor"    : { type: "c", value: new THREE.Color( 0x000000 ) },
-			"outlineAlpha"    : { type: "f", value: 1.0 }
+			"outlineAlpha"    : { type: "f", value: 1.0 },
+			"celShading"      : { type: "i", value: 0 },
+			"toonMap"         : { type: "t", value: null }
 		}
 
 	] ),
@@ -2771,7 +2832,7 @@ THREE.ShaderLib[ 'mmd' ] = {
 			THREE.ShaderChunk[ "shadowmap_vertex" ],
 
 		// MMD specific: outline drawing
-		"	if( outlineDrawing ) {",
+		"	if ( outlineDrawing ) {",
 		"		float thickness = outlineThickness;",
 		"		float ratio = 1.0;", // TODO: support outline size ratio for each vertex
 		"		vec4 epos = projectionMatrix * modelViewMatrix * skinned;",
@@ -2816,6 +2877,14 @@ THREE.ShaderLib[ 'mmd' ] = {
 		"	uniform bool outlineDrawing;",
 		"	uniform vec3 outlineColor;",
 		"	uniform float outlineAlpha;",
+		"	uniform bool celShading;",
+		"	uniform sampler2D toonMap;",
+
+		// MMD specific: toon shadering
+		"	vec3 toon ( vec3 lightDirection, vec3 norm ) {",
+		"		vec2 coord = vec2( 0.0, 0.5 * ( 1.0 - dot( lightDirection, norm ) ) );",
+		"		return texture2D( toonMap, coord ).rgb;",
+		"	}",
 
 		"void main() {",
 
@@ -2843,7 +2912,86 @@ THREE.ShaderLib[ 'mmd' ] = {
 			THREE.ShaderChunk[ "aomap_fragment" ],
 			THREE.ShaderChunk[ "emissivemap_fragment" ],
 
-			THREE.ShaderChunk[ "lights_phong_fragment" ],
+			//THREE.ShaderChunk[ "lights_phong_fragment" ],
+
+		// MMD specific: toon shadering
+		"	vec3 viewDir = normalize( vViewPosition );",
+		"	vec3 totalDiffuseLight = vec3( 0.0 );",
+		"	vec3 totalSpecularLight = vec3( 0.0 );",
+
+		"#if MAX_POINT_LIGHTS > 0",
+		"	for ( int i = 0; i < MAX_POINT_LIGHTS; i ++ ) {",
+		"		vec3 lightColor = pointLightColor[ i ];",
+		"		vec3 lightPosition = pointLightPosition[ i ];",
+		"		vec3 lVector = lightPosition + vViewPosition.xyz;",
+		"		vec3 lightDir = normalize( lVector );",
+		"		// attenuation",
+		"		float attenuation = calcLightAttenuation( length( lVector ), pointLightDistance[ i ], pointLightDecay[ i ] );",
+		"		// diffuse",
+		"		float cosineTerm = saturate( dot( normal, lightDir ) );",
+
+		// MMD specific
+		"		if ( celShading ) {",
+		"			totalDiffuseLight += lightColor * toon( lightDir, normal );",
+		"		} else {",
+		"			totalDiffuseLight += lightColor * attenuation * cosineTerm;",
+		"		}",
+
+		"		// specular",
+		"		vec3 brdf = BRDF_BlinnPhong( specular, shininess, normal, lightDir, viewDir );",
+		"		totalSpecularLight += brdf * specularStrength * lightColor * attenuation * cosineTerm;",
+		"	}",
+		"#endif",
+
+		"#if MAX_SPOT_LIGHTS > 0",
+		"	for ( int i = 0; i < MAX_SPOT_LIGHTS; i ++ ) {",
+		"		vec3 lightColor = spotLightColor[ i ];",
+		"		vec3 lightPosition = spotLightPosition[ i ];",
+		"		vec3 lVector = lightPosition + vViewPosition.xyz;",
+		"		vec3 lightDir = normalize( lVector );",
+		"		float spotEffect = dot( spotLightDirection[ i ], lightDir );",
+		"		if ( spotEffect > spotLightAngleCos[ i ] ) {",
+		"			spotEffect = saturate( pow( saturate( spotEffect ), spotLightExponent[ i ] ) );",
+		"			// attenuation",
+		"			float attenuation = calcLightAttenuation( length( lVector ), spotLightDistance[ i ], spotLightDecay[ i ] );",
+		"			attenuation *= spotEffect;",
+		"			// diffuse",
+		"			float cosineTerm = saturate( dot( normal, lightDir ) );",
+
+		// MMD specific
+		"			if ( celShading ) {",
+		"				totalDiffuseLight += lightColor * toon( lightDir, normal );",
+		"			} else {",
+		"				totalDiffuseLight += lightColor * attenuation * cosineTerm;",
+		"			}",
+
+		"			// specular",
+		"			vec3 brdf = BRDF_BlinnPhong( specular, shininess, normal, lightDir, viewDir );",
+		"			totalSpecularLight += brdf * specularStrength * lightColor * attenuation * cosineTerm;",
+		"		}",
+		"	}",
+		"#endif",
+
+		"#if MAX_DIR_LIGHTS > 0",
+		"	for ( int i = 0; i < MAX_DIR_LIGHTS; i ++ ) {",
+		"		vec3 lightColor = directionalLightColor[ i ];",
+		"		vec3 lightDir = directionalLightDirection[ i ];",
+		"		// diffuse",
+		"		float cosineTerm = saturate( dot( normal, lightDir ) );",
+
+		// MMD specific
+		"		if ( celShading ) {",
+		"			totalDiffuseLight += lightColor * toon( lightDir, normal );",
+		"		} else {",
+		"			totalDiffuseLight += lightColor * cosineTerm;",
+		"		}",
+
+		"		// specular",
+		"		vec3 brdf = BRDF_BlinnPhong( specular, shininess, normal, lightDir, viewDir );",
+		"		totalSpecularLight += brdf * specularStrength * lightColor * cosineTerm;",
+		"	}",
+		"#endif",
+
 			THREE.ShaderChunk[ "shadowmap_fragment" ],
 
 			"totalDiffuseLight *= shadowMask;",
@@ -2885,6 +3033,7 @@ THREE.MMDHelper = function ( mesh, renderer, params ) {
 	this.runAnimation = true;
 	this.runIk = true;
 	this.runPhysics = true;
+	this.drawOutline = true;
 
 	this.init( params );
 
@@ -2970,7 +3119,12 @@ THREE.MMDHelper.prototype = {
 		this.renderer.clear( true, true );
 
 		this.renderMain( scene, camera );
-		this.renderOutline( scene, camera );
+
+		if ( this.drawOutline ) {
+
+			this.renderOutline( scene, camera );
+
+		}
 
 	},
 
