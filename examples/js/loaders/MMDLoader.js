@@ -3061,32 +3061,57 @@ THREE.MMDHelper.prototype = {
 
 	initAnimation: function ( params ) {
 
-		if ( this.mesh.geometry.animations !== undefined || this.mesh.geometry.morphAnimations !== undefined ) {
+		if ( params.noAnimation === true ) {
 
-			this.mixer = new THREE.AnimationMixer( this.mesh );
+			this.runAnimation = false;
+
+		} else {
+
+			if ( this.mesh.geometry.animations !== undefined ||
+			     this.mesh.geometry.morphAnimations !== undefined ) {
+
+				this.mixer = new THREE.AnimationMixer( this.mesh );
+
+			}
+
+			if ( this.mesh.geometry.animations !== undefined ) {
+
+				this.mixer.addAction( new THREE.AnimationAction( this.mesh.geometry.animations[ 0 ] ) );
+
+			}
+
+			if ( this.mesh.geometry.morphAnimations !== undefined ) {
+
+				this.mixer.addAction( new THREE.AnimationAction( this.mesh.geometry.morphAnimations[ 0 ] ) ) ;
+
+			}
 
 		}
 
-		if ( this.mesh.geometry.animations !== undefined ) {
+		if ( params.noIk === true ) {
 
-			this.mixer.addAction( new THREE.AnimationAction( this.mesh.geometry.animations[ 0 ] ) );
+			this.runIk = false;
 
-		}
+		} else {
 
-		if ( this.mesh.geometry.morphAnimations !== undefined ) {
+			if ( this.mesh.geometry.animations !== undefined ) {
 
-			this.mixer.addAction( new THREE.AnimationAction( this.mesh.geometry.morphAnimations[ 0 ] ) ) ;
+				this.ikSolver = new THREE.CCDIKSolver( this.mesh );
 
-		}
-
-		if ( this.mesh.geometry.animations !== undefined ) {
-
-			this.ikSolver = new THREE.CCDIKSolver( this.mesh );
+			}
 
 		}
 
-		this.physics = new THREE.MMDPhysics( this.mesh );
-		this.physics.warmup( 10 );
+		if ( params.noPhysics === true ) {
+
+			this.runPhysics = false;
+
+		} else {
+
+			this.physics = new THREE.MMDPhysics( this.mesh );
+			this.physics.warmup( 10 );
+
+		}
 
 	},
 
