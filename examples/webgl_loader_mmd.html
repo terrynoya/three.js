@@ -80,10 +80,10 @@
 
 				scene = new THREE.Scene();
 
-				var ambient = new THREE.AmbientLight( 0x444444 );
+				var ambient = new THREE.AmbientLight( 0x666666 );
 				scene.add( ambient );
 
-				var directionalLight = new THREE.DirectionalLight( 0xffeedd );
+				var directionalLight = new THREE.DirectionalLight( 0x8877766 );
 				directionalLight.position.set( -1, 1, 1 ).normalize();
 				scene.add( directionalLight );
 
@@ -101,8 +101,6 @@
 
 				var loader = new THREE.MMDLoader();
 				loader.load( 'models/mmd/miku/miku_v2.pmd', 'models/mmd/vmd/wavefile_v2.vmd', function ( object ) {
-//				loader.load( 'models/mmd/miku_low/miku.pmx', 'models/mmd/vmd/wavefile_v2.vmd', function ( object ) {
-//				loader.load( 'models/mmd/MarisaV12/marisa.pmx', 'models/mmd/vmd/wavefile_v2.vmd', function ( object ) {
 
 					mesh = object;
 					mesh.position.y = -10;
