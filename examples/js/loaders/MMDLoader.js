@@ -3,6 +3,7 @@
  *
  * Dependencies
  *  - charset-encoder-js https://github.com/takahirox/charset-encoder-js
+ *  - THREE.TGALoader
  *
  *
  * This loader loads and parses PMD/PMX and VMD binary files
@@ -24,24 +25,19 @@
  *  http://gulshan-i-raz.geo.jp/labs/2012/10/17/pmx-format1/
  *
  * Model data requirements
- *  - convert .tga files to .png files if exist. (Should I use THREE.TGALoader?)
  *  - resize the texture image files to power_of_2*power_of_2
  *
  *
  * TODO
  *  - separate model/vmd loaders.
  *  - multi vmd files support.
- *  - edge(outline) support.
- *  - culling support.
  *  - toon(cel) shadering support.
- *  - add-sphere-mapping support.
  *  - camera motion in vmd support.
  *  - light motion in vmd support.
  *  - music support.
  *  - make own shader for the performance and functionarity.
  *  - SDEF support.
  *  - uv/material/bone morphing support.
- *  - tga file loading support.
  *  - supply skinning support.
  *  - shadow support.
  */
@@ -234,7 +230,7 @@ THREE.MMDLoader.prototype.parsePmd = function ( buffer ) {
 
 			var p = {};
 			p.diffuse = dv.getFloat32Array( 4 );
-			p.shiness = dv.getFloat32();
+			p.shininess = dv.getFloat32();
 			p.specular = dv.getFloat32Array( 3 );
 			p.emissive = dv.getFloat32Array( 3 );
 			p.toonIndex = dv.getUint8();
@@ -819,7 +815,7 @@ THREE.MMDLoader.prototype.parsePmx = function ( buffer ) {
 			p.englishName = dv.getTextBuffer();
 			p.diffuse = dv.getFloat32Array( 4 );
 			p.specular = dv.getFloat32Array( 3 );
-			p.shiness = dv.getFloat32();
+			p.shininess = dv.getFloat32();
 			p.emissive = dv.getFloat32Array( 3 );
 			p.flag = dv.getUint8();
 			p.edgeColor = dv.getFloat32Array( 4 );
@@ -1011,7 +1007,7 @@ THREE.MMDLoader.prototype.parsePmx = function ( buffer ) {
 					m.type = dv.getUint8();
 					m.diffuse = dv.getFloat32Array( 4 );
 					m.specular = dv.getFloat32Array( 3 );
-					m.shiness = dv.getFloat32();
+					m.shininess = dv.getFloat32();
 					m.emissive = dv.getFloat32Array( 3 );
 					m.edgeColor = dv.getFloat32Array( 4 );
 					m.edgeSize = dv.getFloat32();
@@ -1663,8 +1659,48 @@ THREE.MMDLoader.prototype.createMesh = function ( model, vmd, texturePath, onPro
 
 	var initMaterials = function () {
 
+		var textures = [];
+		var textureLoader = new THREE.TextureLoader( this.manager );
+		var tgaLoader = new THREE.TGALoader( this.manager );
+		var materialLoader = new THREE.MaterialLoader( this.manager );
+		var color = new THREE.Color();
 		var offset = 0;
 		var materialParams = [];
+
+		function loadTexture ( filePath, params ) {
+
+			if ( params === undefined ) {
+
+				params = {};
+
+			}
+
+			var fullPath = texturePath + filePath;
+
+			var loader = THREE.Loader.Handlers.get( fullPath );
+
+			if ( loader === null ) {
+
+				loader = ( filePath.indexOf( '.tga' ) >= 0 ) ? tgaLoader : textureLoader;
+
+			}
+
+			var texture = loader.load( fullPath );
+			texture.flipY = false;
+
+			if ( params.sphericalReflectionMapping === true ) {
+
+				texture.mapping = THREE.SphericalReflectionMapping;
+
+			}
+
+			var uuid = THREE.Math.generateUUID();
+
+			textures[ uuid ] = texture;
+
+			return uuid;
+
+		};
 
 		for ( var i = 1; i < model.metadata.materialCount; i++ ) {
 
@@ -1675,7 +1711,12 @@ THREE.MMDLoader.prototype.createMesh = function ( model, vmd, texturePath, onPro
 		for ( var i = 0; i < model.metadata.materialCount; i++ ) {
 
 			var m = model.materials[ i ];
-			var params = {};
+			var params = {
+
+				uuid: THREE.Math.generateUUID(),
+				type: 'MMDMaterial'
+
+			};
 
 			for ( var j = 0; j < m.faceCount; j++ ) {
 
@@ -1696,15 +1737,21 @@ THREE.MMDLoader.prototype.createMesh = function ( model, vmd, texturePath, onPro
 
 			}
 
-			params.shading = 'phong';
-			params.colorDiffuse = [ m.diffuse[ 0 ], m.diffuse[ 1 ], m.diffuse[ 2 ] ];
+			params.name = m.name;
+			params.color = color.fromArray( [ m.diffuse[ 0 ], m.diffuse[ 1 ], m.diffuse[ 2 ] ] ).getHex();
 			params.opacity = m.diffuse[ 3 ];
-			params.colorSpecular = [ m.specular[ 0 ], m.specular[ 1 ], m.specular[ 2 ] ];
-			params.specularCoef = m.shiness;
+			params.specular = color.fromArray( [ m.specular[ 0 ], m.specular[ 1 ], m.specular[ 2 ] ] ).getHex();
+			params.shininess = m.shininess;
+
+			if ( params.opacity < 1 ) {
+
+				params.transparent = true;
+
+			}
 
 			// temporal workaround
 			// TODO: implement correctly
-			params.doubleSided = true;
+			//params.side = THREE.DoubleSide;
 
 			if ( model.metadata.format === 'pmd' ) {
 
@@ -1713,8 +1760,6 @@ THREE.MMDLoader.prototype.createMesh = function ( model, vmd, texturePath, onPro
 					var fileName = m.fileName;
 					var fileNames = [];
 
-					// temporal workaround, disable sphere mapping so far
-					// TODO: sphere mapping support
 					var index = fileName.lastIndexOf( '*' );
 
 					if ( index >= 0 ) {
@@ -1732,16 +1777,23 @@ THREE.MMDLoader.prototype.createMesh = function ( model, vmd, texturePath, onPro
 
 						var n = fileNames[ j ];
 
-						// TODO: support spa
-						if ( /* n.indexOf( '.spa' ) >= 0 || */ n.indexOf( '.sph' ) >= 0 ) {
+						if ( n.indexOf( '.sph' ) >= 0 || n.indexOf( '.spa' ) >= 0 ) {
 
-							params.mapEnv = n;
+							params.envMap = loadTexture( n, { sphericalReflectionMapping: true } );
+
+							if ( n.indexOf( '.sph' ) >= 0 ) {
+
+								params.envMapType = THREE.MultiplyOperation;
+
+							} else {
+
+								params.envMapType = THREE.AddOperation;
+
+							}
 
 						} else {
 
-							// temporal workaround, use .png instead of .tga
-							// TODO: tga file support
-							params.mapDiffuse = n.replace( '.tga', '.png' );
+							params.map = loadTexture( n );
 
 						}
 
@@ -1754,69 +1806,91 @@ THREE.MMDLoader.prototype.createMesh = function ( model, vmd, texturePath, onPro
 				if ( m.textureIndex !== -1 ) {
 
 					var n = model.textures[ m.textureIndex ];
-					// temporal workaround, use .png instead of .tga
-					// TODO: tga file support
-					params.mapDiffuse = n.replace( '.tga', '.png' );
+					params.map = loadTexture( n );
 
 				}
 
-				// TODO: support m.envFlag === 0, 2, 3
-				if ( m.envTextureIndex !== -1 && m.envFlag === 1 ) {
+				// TODO: support m.envFlag === 3
+				if ( m.envTextureIndex !== -1 && ( m.envFlag === 1 || m.envFlag == 2 ) ) {
 
 					var n = model.textures[ m.envTextureIndex ];
-					params.mapEnv = n;
+					params.envMap = loadTexture( n, { sphericalReflectionMapping: true } );
+
+					if ( m.envFlag === 1 ) {
+
+						params.envMapType = THREE.MultiplyOperation;
+
+					} else {
+
+						params.envMapType = THREE.AddOperation;
+
+					}
 
 				}
 
 			}
 
-			if ( params.mapDiffuse === undefined ) {
+			if ( params.map === undefined ) {
 
-				params.colorEmissive = [ m.emissive[ 0 ], m.emissive[ 1 ], m.emissive[ 2 ] ];
+				params.emissive = color.fromArray( [ m.emissive[ 0 ], m.emissive[ 1 ], m.emissive[ 2 ] ] ).getHex();
 
 			}
+
+			var shader = THREE.ShaderLib[ 'mmd' ];
+			params.uniforms = THREE.UniformsUtils.clone( shader.uniforms );
+			params.vertexShader = shader.vertexShader;
+			params.fragmentShader = shader.fragmentShader;
 
 			materialParams.push( params );
 
 		}
 
-		var materials = scope.initMaterials( materialParams, texturePath );
+		materialLoader.setTextures( textures );
 
-		for ( var i = 0; i < materials.length; i++ ) {
+		for ( var i = 0; i < materialParams.length; i++ ) {
 
-			var m = materials[ i ];
 			var p = materialParams[ i ];
-
-			if ( m.map ) {
-
-				m.map.flipY = false;
-
-			}
-
-			// this should be in THREE.Loader.createMaterial.
-			// remove this if it supports.
-			// TODO: make patch of THREE.Loader.createMaterial?
-			if ( p.mapEnv !== undefined ) {
-
-				var fullPath = texturePath + p.mapEnv;
-				var loader = THREE.Loader.Handlers.get( fullPath );
-
-				if ( loader === null ) {
-
-					loader = new THREE.TextureLoader( this.manager );
-
-				}
-
-				var texture = loader.load( fullPath );
-				// currently only support multiply-sphere-mapping
-				// TODO: support add-sphere-mapping
-				texture.mapping = THREE.SphericalReflectionMapping;
-				m.envMap = texture;
-
-			}
+			var p2 = model.materials[ i ];
+			var m = materialLoader.parse( p );
 
 			m.skinning = true;
 			m.morphTargets = true;
+			m.lights = true;
+
+			if ( p.envMap !== undefined ) {
+
+				m.combine = p.envMapType;
+
+			}
+
+			m.uniforms.opacity.value = m.opacity;
+			m.uniforms.diffuse.value = m.color;
+
+			if ( m.emissive ) {
+
+				m.uniforms.emissive.value = m.emissive;
+
+			}
+
+			m.uniforms.map.value = m.map;
+			m.uniforms.envMap.value = m.envMap;
+			m.uniforms.specular.value = m.specular;
+			m.uniforms.shininess.value = Math.max( m.shininess, 1e-4 ); // to prevent pow( 0.0, 0.0 )
+
+			if ( model.metadata.format === 'pmd' ) {
+
+				m.uniforms.outlineThickness.value = p2.edgeFlag === 1 ? 0.003 : 0.0;
+				m.uniforms.outlineColor.value = new THREE.Color( 0.0, 0.0, 0.0 );
+				m.uniforms.outlineAlpha.value = 1.0;
+
+			} else {
+
+				m.uniforms.outlineThickness.value = p2.edgeSize / 1000;
+				m.uniforms.outlineColor.value = new THREE.Color( p2.edgeColor[ 0 ], p2.edgeColor[ 1 ], p2.edgeColor[ 2 ] );
+				m.uniforms.outlineAlpha.value = p2.edgeColor[ 3 ];
+
+			}
+
 			material.materials.push( m );
 
 		}
@@ -2531,6 +2605,409 @@ THREE.MMDLoader.DataView.prototype = {
 
 		var size = this.getUint32();
 		return this.getUnicodeStrings( size );
+
+	}
+
+};
+
+/*
+ * Custom shaders based on MeshPhongMaterial.
+ * This class extends ShaderMaterial while shader is based on MeshPhongMaterial.
+ */
+THREE.MMDMaterial = function ( params ) {
+
+	THREE.ShaderMaterial.call( this, params );
+
+//	this.type = 'MMDMaterial';
+
+	// the followings are copied from MeshPhongMaterial
+	this.color = new THREE.Color( 0xffffff ); // diffuse
+	this.emissive = new THREE.Color( 0x000000 );
+	this.specular = new THREE.Color( 0x111111 );
+	this.shininess = 30;
+
+	this.metal = false;
+
+	this.map = null;
+
+	this.lightMap = null;
+	this.lightMapIntensity = 1.0;
+
+	this.aoMap = null;
+	this.aoMapIntensity = 1.0;
+
+	this.emissiveMap = null;
+
+	this.bumpMap = null;
+	this.bumpScale = 1;
+
+	this.normalMap = null;
+	this.normalScale = new THREE.Vector2( 1, 1 );
+
+	this.displacementMap = null;
+	this.displacementScale = 1;
+	this.displacementBias = 0;
+
+	this.specularMap = null;
+
+	this.alphaMap = null;
+
+	this.envMap = null;
+	this.combine = THREE.MultiplyOperation;
+	this.reflectivity = 1;
+	this.refractionRatio = 0.98;
+
+	this.fog = true;
+
+	this.shading = THREE.SmoothShading;
+
+	this.wireframe = false;
+	this.wireframeLinewidth = 1;
+	this.wireframeLinecap = 'round';
+	this.wireframeLinejoin = 'round';
+
+	this.vertexColors = THREE.NoColors;
+
+	this.skinning = false;
+	this.morphTargets = false;
+	this.morphNormals = false;
+
+	this.setValues( params );
+
+};
+
+THREE.MMDMaterial.prototype = Object.create( THREE.ShaderMaterial.prototype );
+THREE.MMDMaterial.prototype.constructor = THREE.MMDMaterial;
+
+THREE.ShaderLib[ 'mmd' ] = {
+
+	uniforms: THREE.UniformsUtils.merge( [
+
+		THREE.UniformsLib[ "common" ],
+		THREE.UniformsLib[ "aomap" ],
+		THREE.UniformsLib[ "lightmap" ],
+		THREE.UniformsLib[ "emissivemap" ],
+		THREE.UniformsLib[ "bumpmap" ],
+		THREE.UniformsLib[ "normalmap" ],
+		THREE.UniformsLib[ "displacementmap" ],
+		THREE.UniformsLib[ "fog" ],
+		THREE.UniformsLib[ "lights" ],
+		THREE.UniformsLib[ "shadowmap" ],
+
+		{
+			"emissive" : { type: "c", value: new THREE.Color( 0x000000 ) },
+			"specular" : { type: "c", value: new THREE.Color( 0x111111 ) },
+			"shininess": { type: "f", value: 30 }
+		},
+
+		// MMD specific
+		{
+			"outlineDrawing"  : { type: "i", value: 0 },
+			"outlineThickness": { type: "f", value: 0.0 },
+			"outlineColor"    : { type: "c", value: new THREE.Color( 0x000000 ) },
+			"outlineAlpha"    : { type: "f", value: 1.0 }
+		}
+
+	] ),
+
+	vertexShader: [
+
+		"#define PHONG",
+
+		"varying vec3 vViewPosition;",
+
+		"#ifndef FLAT_SHADED",
+
+		"	varying vec3 vNormal;",
+
+		"#endif",
+
+		THREE.ShaderChunk[ "common" ],
+		THREE.ShaderChunk[ "uv_pars_vertex" ],
+		THREE.ShaderChunk[ "uv2_pars_vertex" ],
+		THREE.ShaderChunk[ "displacementmap_pars_vertex" ],
+		THREE.ShaderChunk[ "envmap_pars_vertex" ],
+		THREE.ShaderChunk[ "lights_phong_pars_vertex" ],
+		THREE.ShaderChunk[ "color_pars_vertex" ],
+		THREE.ShaderChunk[ "morphtarget_pars_vertex" ],
+		THREE.ShaderChunk[ "skinning_pars_vertex" ],
+		THREE.ShaderChunk[ "shadowmap_pars_vertex" ],
+		THREE.ShaderChunk[ "logdepthbuf_pars_vertex" ],
+
+		// MMD specific
+		"	uniform bool outlineDrawing;",
+		"	uniform float outlineThickness;",
+
+		"void main() {",
+
+			THREE.ShaderChunk[ "uv_vertex" ],
+			THREE.ShaderChunk[ "uv2_vertex" ],
+			THREE.ShaderChunk[ "color_vertex" ],
+
+			THREE.ShaderChunk[ "beginnormal_vertex" ],
+			THREE.ShaderChunk[ "morphnormal_vertex" ],
+			THREE.ShaderChunk[ "skinbase_vertex" ],
+			THREE.ShaderChunk[ "skinnormal_vertex" ],
+			THREE.ShaderChunk[ "defaultnormal_vertex" ],
+
+		"#ifndef FLAT_SHADED", // Normal computed with derivatives when FLAT_SHADED
+
+		"	vNormal = normalize( transformedNormal );",
+
+		"#endif",
+
+			THREE.ShaderChunk[ "begin_vertex" ],
+			THREE.ShaderChunk[ "displacementmap_vertex" ],
+			THREE.ShaderChunk[ "morphtarget_vertex" ],
+			THREE.ShaderChunk[ "skinning_vertex" ],
+			THREE.ShaderChunk[ "project_vertex" ],
+			THREE.ShaderChunk[ "logdepthbuf_vertex" ],
+
+		"	vViewPosition = - mvPosition.xyz;",
+
+			THREE.ShaderChunk[ "worldpos_vertex" ],
+			THREE.ShaderChunk[ "envmap_vertex" ],
+			THREE.ShaderChunk[ "lights_phong_vertex" ],
+			THREE.ShaderChunk[ "shadowmap_vertex" ],
+
+		// MMD specific: outline drawing
+		"	if( outlineDrawing ) {",
+		"		float thickness = outlineThickness;",
+		"		float ratio = 1.0;", // TODO: support outline size ratio for each vertex
+		"		vec4 epos = projectionMatrix * modelViewMatrix * skinned;",
+		"		vec4 epos2 = projectionMatrix * modelViewMatrix * vec4( skinned.xyz + transformedNormal, 1.0 );",
+		"		vec4 enorm = normalize( epos2 - epos );",
+		"		gl_Position = epos + enorm * thickness * epos.w * ratio;",
+		"	}",
+
+		"}"
+
+	].join( "\n" ),
+
+	fragmentShader: [
+
+		"#define PHONG",
+
+		"uniform vec3 diffuse;",
+		"uniform vec3 emissive;",
+		"uniform vec3 specular;",
+		"uniform float shininess;",
+		"uniform float opacity;",
+
+		THREE.ShaderChunk[ "common" ],
+		THREE.ShaderChunk[ "color_pars_fragment" ],
+		THREE.ShaderChunk[ "uv_pars_fragment" ],
+		THREE.ShaderChunk[ "uv2_pars_fragment" ],
+		THREE.ShaderChunk[ "map_pars_fragment" ],
+		THREE.ShaderChunk[ "alphamap_pars_fragment" ],
+		THREE.ShaderChunk[ "aomap_pars_fragment" ],
+		THREE.ShaderChunk[ "lightmap_pars_fragment" ],
+		THREE.ShaderChunk[ "emissivemap_pars_fragment" ],
+		THREE.ShaderChunk[ "envmap_pars_fragment" ],
+		THREE.ShaderChunk[ "fog_pars_fragment" ],
+		THREE.ShaderChunk[ "lights_phong_pars_fragment" ],
+		THREE.ShaderChunk[ "shadowmap_pars_fragment" ],
+		THREE.ShaderChunk[ "bumpmap_pars_fragment" ],
+		THREE.ShaderChunk[ "normalmap_pars_fragment" ],
+		THREE.ShaderChunk[ "specularmap_pars_fragment" ],
+		THREE.ShaderChunk[ "logdepthbuf_pars_fragment" ],
+
+		// MMD specific
+		"	uniform bool outlineDrawing;",
+		"	uniform vec3 outlineColor;",
+		"	uniform float outlineAlpha;",
+
+		"void main() {",
+
+		// MMD specific: outline drawing
+		"	if ( outlineDrawing ) {",
+		"		gl_FragColor = vec4( outlineColor, outlineAlpha );",
+		"		return;",
+		"	}",
+
+		"	vec3 outgoingLight = vec3( 0.0 );",
+		"	vec4 diffuseColor = vec4( diffuse, opacity );",
+		"	vec3 totalAmbientLight = ambientLightColor;",
+		"	vec3 totalEmissiveLight = emissive;",
+		"	vec3 shadowMask = vec3( 1.0 );",
+
+			THREE.ShaderChunk[ "logdepthbuf_fragment" ],
+			THREE.ShaderChunk[ "map_fragment" ],
+			THREE.ShaderChunk[ "color_fragment" ],
+			THREE.ShaderChunk[ "alphamap_fragment" ],
+			THREE.ShaderChunk[ "alphatest_fragment" ],
+			THREE.ShaderChunk[ "specularmap_fragment" ],
+			THREE.ShaderChunk[ "normal_phong_fragment" ],
+			THREE.ShaderChunk[ "lightmap_fragment" ],
+			THREE.ShaderChunk[ "hemilight_fragment" ],
+			THREE.ShaderChunk[ "aomap_fragment" ],
+			THREE.ShaderChunk[ "emissivemap_fragment" ],
+
+			THREE.ShaderChunk[ "lights_phong_fragment" ],
+			THREE.ShaderChunk[ "shadowmap_fragment" ],
+
+			"totalDiffuseLight *= shadowMask;",
+			"totalSpecularLight *= shadowMask;",
+
+			"#ifdef METAL",
+
+			"	outgoingLight += diffuseColor.rgb * ( totalDiffuseLight + totalAmbientLight ) * specular + totalSpecularLight + totalEmissiveLight;",
+
+			"#else",
+
+			"	outgoingLight += diffuseColor.rgb * ( totalDiffuseLight + totalAmbientLight ) + totalSpecularLight + totalEmissiveLight;",
+
+			"#endif",
+
+			THREE.ShaderChunk[ "envmap_fragment" ],
+
+			THREE.ShaderChunk[ "linear_to_gamma_fragment" ],
+
+			THREE.ShaderChunk[ "fog_fragment" ],
+
+		"	gl_FragColor = vec4( outgoingLight, diffuseColor.a );",
+
+		"}"
+
+	].join( "\n" )
+
+};
+
+THREE.MMDHelper = function ( mesh, renderer, params ) {
+
+	this.mesh = mesh;
+	this.renderer = renderer;
+
+	this.mixer = null;
+	this.ikSolver = null;
+	this.physics = null;
+
+	this.runAnimation = true;
+	this.runIk = true;
+	this.runPhysics = true;
+
+	this.init( params );
+
+};
+
+THREE.MMDHelper.prototype = {
+
+	constructor: THREE.MMDHelper,
+
+	init: function ( params ) {
+
+		params = ( params !== undefined && params !== null ) ? params : {};
+		this.initRender();
+		this.initAnimation( params );
+
+	},
+
+	initRender: function () {
+
+		this.renderer.autoClear = false;
+		this.renderer.autoClearColor = false;
+		this.renderer.autoClearDepth = false;
+
+	},
+
+	initAnimation: function ( params ) {
+
+		if ( this.mesh.geometry.animations !== undefined || this.mesh.geometry.morphAnimations !== undefined ) {
+
+			this.mixer = new THREE.AnimationMixer( this.mesh );
+
+		}
+
+		if ( this.mesh.geometry.animations !== undefined ) {
+
+			this.mixer.addAction( new THREE.AnimationAction( this.mesh.geometry.animations[ 0 ] ) );
+
+		}
+
+		if ( this.mesh.geometry.morphAnimations !== undefined ) {
+
+			this.mixer.addAction( new THREE.AnimationAction( this.mesh.geometry.morphAnimations[ 0 ] ) ) ;
+
+		}
+
+		if ( this.mesh.geometry.animations !== undefined ) {
+
+			this.ikSolver = new THREE.CCDIKSolver( this.mesh );
+
+		}
+
+		this.physics = new THREE.MMDPhysics( this.mesh );
+		this.physics.warmup( 10 );
+
+	},
+
+	animate: function ( delta ) {
+
+		if ( this.mixer !== null && this.runAnimation === true ) {
+
+			this.mixer.update( delta );
+
+		}
+
+		if ( this.ikSolver !== null && this.runIk === true ) {
+
+			this.ikSolver.update();
+
+		}
+
+		if ( this.physics !== null && this.runPhysics === true ) {
+
+			this.physics.update( delta );
+
+		}
+
+	},
+
+	render: function ( scene, camera ) {
+
+		this.renderer.clearColor();
+		this.renderer.clearDepth();
+		this.renderer.clear( true, true );
+
+		this.renderMain( scene, camera );
+		this.renderOutline( scene, camera );
+
+	},
+
+	renderMain: function ( scene, camera ) {
+
+		for ( var i = 0; i < this.mesh.material.materials.length; i++ ) {
+
+			var m = this.mesh.material.materials[ i ];
+			m.uniforms.outlineDrawing.value = 0;
+
+			if ( m.opacity === 1.0 ) {
+
+				renderer.setFaceCulling( THREE.CullFaceBack, THREE.FrontFaceDirectionCCW );
+
+			} else {
+
+				renderer.setFaceCulling( THREE.CullFaceNone, THREE.FrontFaceDirectionCCW );
+
+			}
+
+		}
+
+		this.renderer.render( scene, camera );
+
+	},
+
+	renderOutline: function ( scene, camera ) {
+
+		for ( var i = 0; i < mesh.material.materials.length; i++ ) {
+
+			var m = mesh.material.materials[ i ];
+			m.uniforms.outlineDrawing.value = 1;
+			renderer.setFaceCulling( THREE.CullFaceFront, THREE.FrontFaceDirectionCCW );
+
+		}
+
+		this.renderer.render( scene, camera );
 
 	}
 
