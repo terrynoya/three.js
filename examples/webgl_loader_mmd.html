@@ -52,11 +52,6 @@
 			var mesh, camera, scene, renderer;
 			var helper;
 
-			/*
-			 * Caution: Physics calculation is pretty heavy.
-			 *          It may be not acceptable for most mobile devices yet.
-			 */
-
 			var mouseX = 0, mouseY = 0;
 
 			var windowHalfX = window.innerWidth / 2;
@@ -107,6 +102,16 @@
 					scene.add( mesh );
 
 					helper = new THREE.MMDHelper( mesh, renderer );
+
+					/*
+					 * Note: Physics calculation is pretty heavy.
+					 *       It may be not acceptable for most mobile devices yet.
+			 		 */
+					if ( isMobileDevice() ) {
+
+						helper.runPhysics = false;
+
+					}
 
 				}, onProgress, onError );
 
@@ -171,6 +176,33 @@
 					renderer.render( scene, camera );
 
 				}
+
+			}
+
+			// easy mobile device detection
+			function isMobileDevice () {
+
+				if ( navigator === undefined || navigator.userAgent === undefined ) {
+
+					return true;
+
+				}
+
+				var s = navigator.userAgent;
+
+				if (    s.match( /iPhone/i )
+//				     || s.match( /iPad/i )
+				     || s.match( /iPod/i )
+				     || s.match( /webOS/i )
+				     || s.match( /BlackBerry/i )
+				     || ( s.match( /Windows/i ) && s.match( /Phone/i ) )
+				     || ( s.match( /Android/i ) && s.match( /Mobile/i ) ) ) {
+
+					return true;
+
+				}
+
+				return false;
 
 			}
 
