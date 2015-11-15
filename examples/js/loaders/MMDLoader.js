@@ -31,6 +31,7 @@
  * TODO
  *  - separate model/vmd loaders.
  *  - multi vmd files support.
+ *  - vpd file support.
  *  - camera motion in vmd support.
  *  - light motion in vmd support.
  *  - music support.
@@ -1863,6 +1864,12 @@ THREE.MMDLoader.prototype.createMesh = function ( model, vmd, texturePath, onPro
 			m.morphTargets = true;
 			m.lights = true;
 
+			m.blending = THREE.CustomBlending;
+			m.blendSrc = THREE.SrcAlphaFactor;
+			m.blendDst = THREE.OneMinusSrcAlphaFactor;
+			m.blendSrcAlpha = THREE.SrcAlphaFactor;
+			m.blendDstAlpha = THREE.DstAlphaFactor;
+
 			if ( p.envMap !== undefined ) {
 
 				m.combine = p.envMapType;
@@ -3159,19 +3166,11 @@ THREE.MMDHelper.prototype = {
 
 			var m = this.mesh.material.materials[ i ];
 			m.uniforms.outlineDrawing.value = 0;
-
-			if ( m.opacity === 1.0 ) {
-
-				renderer.setFaceCulling( THREE.CullFaceBack, THREE.FrontFaceDirectionCCW );
-
-			} else {
-
-				renderer.setFaceCulling( THREE.CullFaceNone, THREE.FrontFaceDirectionCCW );
-
-			}
+			m.side = THREE.DoubleSide;
 
 		}
 
+		this.renderer.setFaceCulling( THREE.CullFaceBack, THREE.FrontFaceDirectionCCW );
 		this.renderer.render( scene, camera );
 
 	},
@@ -3182,9 +3181,12 @@ THREE.MMDHelper.prototype = {
 
 			var m = mesh.material.materials[ i ];
 			m.uniforms.outlineDrawing.value = 1;
-			renderer.setFaceCulling( THREE.CullFaceFront, THREE.FrontFaceDirectionCCW );
+			m.side = THREE.BackSide;
 
 		}
+
+		//this.renderer.setFaceCulling( THREE.CullFaceBack, THREE.FrontFaceDirectionCCW );
+		this.renderer.state.setBlending( THREE.NoBlending );
 
 		this.renderer.render( scene, camera );
 

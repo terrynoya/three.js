@@ -78,7 +78,7 @@
 				var ambient = new THREE.AmbientLight( 0x666666 );
 				scene.add( ambient );
 
-				var directionalLight = new THREE.DirectionalLight( 0x8877766 );
+				var directionalLight = new THREE.DirectionalLight( 0x887766 );
 				directionalLight.position.set( -1, 1, 1 ).normalize();
 				scene.add( directionalLight );
 
@@ -100,9 +100,6 @@
 					mesh = object;
 					mesh.position.y = -10;
 					scene.add( mesh );
-
-					var params = {};
-
 
 					/*
 					 * Note: Physics calculation is pretty heavy.
