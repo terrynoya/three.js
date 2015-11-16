@@ -1967,19 +1967,7 @@ THREE.MMDLoader.prototype.createMesh = function ( model, texturePath, onProgress
 
 					}
 
-					var prefix = n.slice( 0, 4 );
-					var num = parseInt( n.slice( 4, 6 ) );
-					var suffix = n.slice( 6, 10 );
-
-					if ( prefix === 'toon' && suffix === '.bmp' && ! isNaN( num ) && num >= 0 && num <= 10 ) {
-
-						return true;
-
-					} else {
-
-						return false;
-
-					}
+					return n.match( /toon(10|0[0-9]).bmp/ ) === null ? false : true;
 
 				};
 
