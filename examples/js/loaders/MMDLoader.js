@@ -146,8 +146,8 @@ THREE.MMDLoader.prototype.mergeVmds = function ( vmds ) {
 
 		var v2 = vmds[ i ];
 
-		v.metadata.motionCount = v2.metadata.motionCount;
-		v.metadata.morphCount = v2.metadata.morphCount;
+		v.metadata.motionCount += v2.metadata.motionCount;
+		v.metadata.morphCount += v2.metadata.morphCount;
 
 		for ( var j = 0; j < v2.metadata.motionCount; j++ ) {
 
