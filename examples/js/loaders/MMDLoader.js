@@ -24,9 +24,6 @@
  * PMX format
  *  http://gulshan-i-raz.geo.jp/labs/2012/10/17/pmx-format1/
  *
- * Model data requirements
- *  - resize the texture image files to power_of_2*power_of_2
- *
  *
  * TODO
  *  - vpd file support.
@@ -1759,14 +1756,22 @@ THREE.MMDLoader.prototype.createMesh = function ( model, texturePath, onProgress
 
 			}
 
-			var texture = loader.load( fullPath );
-			texture.flipY = false;
+			var isSphericalReflectionMapping = params.sphericalReflectionMapping;
+			var texture = loader.load( fullPath, function ( t ) {
 
-			if ( params.sphericalReflectionMapping === true ) {
+				t.flipY = false;
+				t.wrapS = THREE.RepeatWrapping;
+				t.wrapT = THREE.RepeatWrapping;
 
-				texture.mapping = THREE.SphericalReflectionMapping;
+				if ( isSphericalReflectionMapping === true ) {
 
-			}
+					t.mapping = THREE.SphericalReflectionMapping;
+
+				}
+
+			} );
+
+
 
 			var uuid = THREE.Math.generateUUID();
 
