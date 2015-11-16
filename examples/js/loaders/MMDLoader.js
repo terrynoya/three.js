@@ -3124,19 +3124,20 @@ THREE.ShaderLib[ 'mmd' ] = {
 
 };
 
-THREE.MMDHelper = function ( mesh, renderer ) {
+THREE.MMDHelper = function ( renderer ) {
 
-	this.mesh = mesh;
 	this.renderer = renderer;
 
-	this.mixer = null;
-	this.ikSolver = null;
-	this.physics = null;
+	this.meshes = [];
 
-	this.runAnimation = true;
-	this.runIk = true;
-	this.runPhysics = true;
-	this.drawOutline = true;
+	this.mixers = [];
+	this.ikSolvers = [];
+	this.physicses = [];
+
+	this.runAnimations = [];
+	this.runIks = [];
+	this.runPhysicses = [];
+	this.drawOutlines = [];
 
 	this.init();
 
@@ -3160,37 +3161,53 @@ THREE.MMDHelper.prototype = {
 
 	},
 
-	setPhysics: function () {
+	addMesh: function ( mesh ) {
 
-		this.physics = new THREE.MMDPhysics( this.mesh );
-		this.physics.warmup( 10 );
+		this.meshes.push( mesh );
+		this.mixers.push( null );
+		this.ikSolvers.push( null );
+		this.physicses.push( null );
+		this.runAnimations.push( true );
+		this.runIks.push( true );
+		this.runPhysicses.push( true );
+		this.drawOutlines.push( true );
 
 	},
 
-	setAnimation: function () {
+	setPhysics: function ( n ) {
 
-		if ( this.mesh.geometry.animations !== undefined ||
-		     this.mesh.geometry.morphAnimations !== undefined ) {
+		var mesh = this.meshes[ n ];
+		this.physicses[ n ] = new THREE.MMDPhysics( mesh );
+		this.physicses[ n ].warmup( 10 );
 
-			this.mixer = new THREE.AnimationMixer( this.mesh );
+	},
 
-		}
+	setAnimation: function ( n ) {
 
-		if ( this.mesh.geometry.animations !== undefined ) {
+		var mesh = this.meshes[ n ];
 
-			this.mixer.addAction( new THREE.AnimationAction( this.mesh.geometry.animations[ 0 ] ) );
+		if ( mesh.geometry.animations !== undefined ||
+		     mesh.geometry.morphAnimations !== undefined ) {
 
-		}
-
-		if ( this.mesh.geometry.morphAnimations !== undefined ) {
-
-			this.mixer.addAction( new THREE.AnimationAction( this.mesh.geometry.morphAnimations[ 0 ] ) ) ;
+			this.mixers[ n ] = new THREE.AnimationMixer( mesh );
 
 		}
 
-		if ( this.mesh.geometry.animations !== undefined ) {
+		if ( mesh.geometry.animations !== undefined ) {
 
-			this.ikSolver = new THREE.CCDIKSolver( this.mesh );
+			this.mixers[ n ].addAction( new THREE.AnimationAction( mesh.geometry.animations[ 0 ] ) );
+
+		}
+
+		if ( mesh.geometry.morphAnimations !== undefined ) {
+
+			this.mixers[ n ].addAction( new THREE.AnimationAction( mesh.geometry.morphAnimations[ 0 ] ) ) ;
+
+		}
+
+		if ( mesh.geometry.animations !== undefined ) {
+
+			this.ikSolvers[ n ] = new THREE.CCDIKSolver( mesh );
 
 		}
 
@@ -3198,21 +3215,38 @@ THREE.MMDHelper.prototype = {
 
 	animate: function ( delta ) {
 
-		if ( this.mixer !== null && this.runAnimation === true ) {
+		for ( var i = 0; i < this.meshes.length; i++ ) {
 
-			this.mixer.update( delta );
-
-		}
-
-		if ( this.ikSolver !== null && this.runIk === true ) {
-
-			this.ikSolver.update();
+			this.animateOneMesh( delta, i );
 
 		}
 
-		if ( this.physics !== null && this.runPhysics === true ) {
+	},
 
-			this.physics.update( delta );
+	animateOneMesh: function ( delta, n ) {
+
+		var mixer = this.mixers[ n ];
+		var ikSolver = this.ikSolvers[ n ];
+		var physics = this.physicses[ n ];
+		var runAnimation = this.runAnimations[ n ];
+		var runIk = this.runIks[ n ];
+		var runPhysics = this.runPhysicses[ n ];
+
+		if ( mixer !== null && runAnimation === true ) {
+
+			mixer.update( delta );
+
+		}
+
+		if ( ikSolver !== null && runIk === true ) {
+
+			ikSolver.update();
+
+		}
+
+		if ( physics !== null && runPhysics === true ) {
+
+			physics.update( delta );
 
 		}
 
@@ -3236,13 +3270,7 @@ THREE.MMDHelper.prototype = {
 
 	renderMain: function ( scene, camera ) {
 
-		for ( var i = 0; i < this.mesh.material.materials.length; i++ ) {
-
-			var m = this.mesh.material.materials[ i ];
-			m.uniforms.outlineDrawing.value = 0;
-			m.side = THREE.DoubleSide;
-
-		}
+		this.setupMainRendering();
 
 		this.renderer.setFaceCulling( THREE.CullFaceBack, THREE.FrontFaceDirectionCCW );
 		this.renderer.render( scene, camera );
@@ -3251,6 +3279,53 @@ THREE.MMDHelper.prototype = {
 
 	renderOutline: function ( scene, camera ) {
 
+		this.setupOutlineRendering();
+
+		//this.renderer.setFaceCulling( THREE.CullFaceBack, THREE.FrontFaceDirectionCCW );
+		this.renderer.state.setBlending( THREE.NoBlending );
+
+		this.renderer.render( scene, camera );
+
+	},
+
+	setupMainRendering: function () {
+
+		for ( var i = 0; i < this.meshes.length; i++ ) {
+
+			this.setupMainRenderingOneMesh( i );
+
+		}
+
+	},
+
+	setupMainRenderingOneMesh: function ( n ) {
+
+		var mesh = this.meshes[ n ];
+
+		for ( var i = 0; i < mesh.material.materials.length; i++ ) {
+
+			var m = mesh.material.materials[ i ];
+			m.uniforms.outlineDrawing.value = 0;
+			m.side = THREE.DoubleSide;
+
+		}
+
+	},
+
+	setupOutlineRendering: function () {
+
+		for ( var i = 0; i < this.meshes.length; i++ ) {
+
+			this.setupOutlineRenderingOneMesh( i );
+
+		}
+
+	},
+
+	setupOutlineRenderingOneMesh: function ( n ) {
+
+		var mesh = this.meshes[ n ];
+
 		for ( var i = 0; i < mesh.material.materials.length; i++ ) {
 
 			var m = mesh.material.materials[ i ];
@@ -3258,11 +3333,6 @@ THREE.MMDHelper.prototype = {
 			m.side = THREE.BackSide;
 
 		}
-
-		//this.renderer.setFaceCulling( THREE.CullFaceBack, THREE.FrontFaceDirectionCCW );
-		this.renderer.state.setBlending( THREE.NoBlending );
-
-		this.renderer.render( scene, camera );
 
 	}
 
