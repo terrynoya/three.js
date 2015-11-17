@@ -3129,15 +3129,14 @@ THREE.MMDHelper = function ( renderer ) {
 	this.renderer = renderer;
 
 	this.meshes = [];
-
 	this.mixers = [];
 	this.ikSolvers = [];
 	this.physicses = [];
 
-	this.runAnimations = [];
-	this.runIks = [];
-	this.runPhysicses = [];
-	this.drawOutlines = [];
+	this.runAnimation = true;
+	this.runIk = true;
+	this.runPhysics = true;
+	this.drawOutline = true;
 
 	this.init();
 
@@ -3167,10 +3166,16 @@ THREE.MMDHelper.prototype = {
 		this.mixers.push( null );
 		this.ikSolvers.push( null );
 		this.physicses.push( null );
-		this.runAnimations.push( true );
-		this.runIks.push( true );
-		this.runPhysicses.push( true );
-		this.drawOutlines.push( true );
+
+	},
+
+	setPhysicses: function () {
+
+		for ( var i = 0; i < this.meshes.length; i++ ) {
+
+			this.setPhysics( i );
+
+		}
 
 	},
 
@@ -3179,6 +3184,16 @@ THREE.MMDHelper.prototype = {
 		var mesh = this.meshes[ n ];
 		this.physicses[ n ] = new THREE.MMDPhysics( mesh );
 		this.physicses[ n ].warmup( 10 );
+
+	},
+
+	setAnimations: function () {
+
+		for ( var i = 0; i < this.meshes.length; i++ ) {
+
+			this.setAnimation( i );
+
+		}
 
 	},
 
@@ -3228,23 +3243,20 @@ THREE.MMDHelper.prototype = {
 		var mixer = this.mixers[ n ];
 		var ikSolver = this.ikSolvers[ n ];
 		var physics = this.physicses[ n ];
-		var runAnimation = this.runAnimations[ n ];
-		var runIk = this.runIks[ n ];
-		var runPhysics = this.runPhysicses[ n ];
 
-		if ( mixer !== null && runAnimation === true ) {
+		if ( mixer !== null && this.runAnimation === true ) {
 
 			mixer.update( delta );
 
 		}
 
-		if ( ikSolver !== null && runIk === true ) {
+		if ( ikSolver !== null && this.runIk === true ) {
 
 			ikSolver.update();
 
 		}
 
-		if ( physics !== null && runPhysics === true ) {
+		if ( physics !== null && this.runPhysics === true ) {
 
 			physics.update( delta );
 
