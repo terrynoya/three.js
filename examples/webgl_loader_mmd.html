@@ -62,7 +62,6 @@
 			init();
 			animate();
 
-
 			function init() {
 
 				container = document.createElement( 'div' );
@@ -82,6 +81,14 @@
 				directionalLight.position.set( -1, 1, 1 ).normalize();
 				scene.add( directionalLight );
 
+				//
+
+				renderer = new THREE.WebGLRenderer();
+				renderer.setPixelRatio( window.devicePixelRatio );
+				renderer.setSize( window.innerWidth, window.innerHeight );
+				renderer.setClearColor( new THREE.Color( 0xffffff ) );
+				container.appendChild( renderer.domElement );
+
 				// model
 
 				var onProgress = function ( xhr ) {
@@ -97,6 +104,8 @@
 				var modelFile = 'models/mmd/miku/miku_v2.pmd';
 				var vmdFiles = [ 'models/mmd/vmd/wavefile_v2.vmd' ];
 
+				helper = new THREE.MMDHelper( renderer );
+
 				var loader = new THREE.MMDLoader();
 				loader.setDefaultTexturePath( './models/mmd/default/' );
 
@@ -104,31 +113,25 @@
 
 					mesh = object;
 					mesh.position.y = -10;
-					scene.add( mesh );
 
-					helper = new THREE.MMDHelper( mesh, renderer );
+					helper.add( mesh );
+					helper.setAnimations();
 
 					/*
+					 * Note: You must set Physics
+					 *       before you add mesh to scene or any other 3D object.
 					 * Note: Physics calculation is pretty heavy.
 					 *       It may not be acceptable for most mobile devices yet.
 			 		 */
 					if ( ! isMobileDevice() ) {
 
-						helper.setPhysics();
+						helper.setPhysicses();
 
 					}
 
-					helper.setAnimation();
+					scene.add( mesh );
 
 				}, onProgress, onError );
-
-				//
-
-				renderer = new THREE.WebGLRenderer();
-				renderer.setPixelRatio( window.devicePixelRatio );
-				renderer.setSize( window.innerWidth, window.innerHeight );
-				renderer.setClearColor( new THREE.Color( 0xffffff ) );
-				container.appendChild( renderer.domElement );
 
 				document.addEventListener( 'mousemove', onDocumentMouseMove, false );
 
@@ -180,6 +183,7 @@
 
 				} else {
 
+					renderer.clear();
 					renderer.render( scene, camera );
 
 				}
