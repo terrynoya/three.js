@@ -3160,7 +3160,7 @@ THREE.MMDHelper.prototype = {
 
 	},
 
-	addMesh: function ( mesh ) {
+	add: function ( mesh ) {
 
 		this.meshes.push( mesh );
 		this.mixers.push( null );
