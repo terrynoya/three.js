@@ -139,8 +139,10 @@ THREE.MMDLoader.prototype.mergeVmds = function ( vmds ) {
 	v.metadata.coordinateSystem = vmds[ 0 ].metadata.coordinateSystem;
 	v.metadata.motionCount = 0;
 	v.metadata.morphCount = 0;
+	v.metadata.cameraCount = 0;
 	v.motions = [];
 	v.morphs = [];
+	v.cameras = [];
 
 	for ( var i = 0; i < vmds.length; i++ ) {
 
@@ -148,6 +150,7 @@ THREE.MMDLoader.prototype.mergeVmds = function ( vmds ) {
 
 		v.metadata.motionCount += v2.metadata.motionCount;
 		v.metadata.morphCount += v2.metadata.morphCount;
+		v.metadata.cameraCount += v2.metadata.cameraCount;
 
 		for ( var j = 0; j < v2.metadata.motionCount; j++ ) {
 
@@ -158,6 +161,12 @@ THREE.MMDLoader.prototype.mergeVmds = function ( vmds ) {
 		for ( var j = 0; j < v2.metadata.morphCount; j++ ) {
 
 			v.morphs.push( v2.morphs[ j ] );
+
+		}
+
+		for ( var j = 0; j < v2.metadata.cameraCount; j++ ) {
+
+			v.cameras.push( v2.cameras[ j ] );
 
 		}
 
@@ -1319,9 +1328,40 @@ THREE.MMDLoader.prototype.parseVmd = function ( buffer ) {
 
 	};
 
+	var parseCameras = function () {
+
+		var parseCamera = function () {
+
+			var p = {};
+			p.frameNum = dv.getUint32();
+			p.distance = dv.getFloat32();
+			p.position = dv.getFloat32Array( 3 );
+			p.rotation = dv.getFloat32Array( 3 );
+			p.interpolation = dv.getUint8Array( 24 );
+			p.angle = dv.getUint32();
+			p.perspective = dv.getUint8();
+			return p;
+
+		};
+
+		var metadata = vmd.metadata;
+		metadata.cameraCount = dv.getUint32();
+
+		vmd.cameras = [];
+		for ( var i = 0; i < metadata.cameraCount; i++ ) {
+
+			vmd.cameras.push( parseCamera() );
+
+		}
+
+	};
+
 	parseHeader();
 	parseMotions();
 	parseMorphs();
+	parseCameras();
+
+	// console.log( vmd ); // for console debug
 
 	return vmd;
 
