@@ -790,16 +790,21 @@ THREE.MMDPhysics.RigidBody.prototype = {
 
 		var thQ = helper.allocThreeQuaternion();
 		var thQ2 = helper.allocThreeQuaternion();
+		var thQ3 = helper.allocThreeQuaternion();
 
 		thQ.set( q.x(), q.y(), q.z(), q.w() );
 		thQ2.setFromRotationMatrix( this.bone.matrixWorld );
 		thQ2.conjugate()
 		thQ2.multiply( thQ );
 
-		this.bone.quaternion.multiply( thQ2 );
+		//this.bone.quaternion.multiply( thQ2 );
+
+		thQ3.setFromRotationMatrix( this.bone.matrix );
+		this.bone.quaternion.copy( thQ2.multiply( thQ3 ) );
 
 		helper.freeThreeQuaternion( thQ );
 		helper.freeThreeQuaternion( thQ2 );
+		helper.freeThreeQuaternion( thQ3 );
 
 		helper.freeQuaternion( q );
 		helper.freeTransform( tr );
