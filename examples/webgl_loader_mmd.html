@@ -115,7 +115,7 @@
 					mesh.position.y = -10;
 
 					helper.add( mesh );
-					helper.setAnimations();
+					helper.setAnimation( mesh );
 
 					/*
 					 * Note: You must set Physics
@@ -125,9 +125,11 @@
 			 		 */
 					if ( ! isMobileDevice() ) {
 
-						helper.setPhysicses();
+						helper.setPhysics( mesh );
 
 					}
+
+					helper.unifyAnimationDuration();
 
 					scene.add( mesh );
 
