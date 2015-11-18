@@ -27,7 +27,6 @@
  *
  * TODO
  *  - vpd file support.
- *  - camera motion in vmd support.
  *  - light motion in vmd support.
  *  - music support.
  *  - SDEF support.
@@ -179,6 +178,130 @@ THREE.MMDLoader.prototype.mergeVmds = function ( vmds ) {
 THREE.MMDLoader.prototype.pourVmdIntoModel = function ( mesh, vmd ) {
 
 	this.createAnimation( mesh, vmd );
+
+};
+
+THREE.MMDLoader.prototype.pourVmdIntoCamera = function ( camera, vmd ) {
+
+	var initAnimation = function () {
+
+		function pushKey ( keys, time, value ) {
+
+			keys.push(
+				{
+					time: time,
+					value: value
+				}
+			);
+
+		};
+
+		function initializeIfNoElement ( keys, value ) {
+
+			if ( keys.length === 0 ) {
+
+				pkeys.push(
+					{
+						time: 0.0,
+						value: value
+					}
+				);
+
+			}
+
+		};
+
+		function insertStartKey ( keys ) {
+
+			var k = keys[ 0 ];
+
+			if ( k.time !== 0.0 ) {
+
+				keys.unshift(
+					{
+						time: 0.0,
+						value: k.value.clone === undefined ? k.value : k.value.cone()
+					}
+				);
+
+			}
+
+		};
+
+		var orderedMotion = [];
+
+		for ( var i = 0; i < vmd.cameras.length; i++ ) {
+
+			var m = vmd.cameras[ i ];
+			orderedMotion.push( m );
+
+		}
+
+		orderedMotion.sort( function ( a, b ) {
+
+			return a.frameNum - b.frameNum;
+
+		} ) ;
+
+		var array = orderedMotion;
+		var q = new THREE.Quaternion();
+		var e = new THREE.Euler();
+		var pkeys = [];
+		var ckeys = [];
+		var ukeys = [];
+		var fkeys = [];
+
+		for ( var i = 0; i < array.length; i++ ) {
+
+			var t = array[ i ].frameNum / 30;
+			var p = array[ i ].position;
+			var r = array[ i ].rotation;
+			var d = array[ i ].distance;
+			var f = array[ i ].fov;
+
+			var position = new THREE.Vector3( 0, 0, -d );
+			var center = new THREE.Vector3( p[ 0 ], p[ 1 ], p[ 2 ] );
+			var up = new THREE.Vector3( 0, 1, 0 );
+
+			e.set( r[ 0 ], r[ 1 ], r[ 2 ] );
+			q.setFromEuler( e );
+
+			position.applyQuaternion( q );
+			position.add( center );
+
+			up.applyQuaternion( q );
+
+			pushKey( pkeys, t, position );
+			pushKey( ckeys, t, center );
+			pushKey( ukeys, t, up );
+			pushKey( fkeys, t, f );
+
+		}
+
+		initializeIfNoElement( pkeys, new THREE.Vector3( 0, 0, 0 ) );
+		initializeIfNoElement( ckeys, new THREE.Vector3( 0, 0, 0 ) );
+		initializeIfNoElement( ukeys, new THREE.Vector3( 0, 0, 0 ) );
+		initializeIfNoElement( fkeys, 45 );
+
+		insertStartKey( pkeys );
+		insertStartKey( ckeys );
+		insertStartKey( ukeys );
+		insertStartKey( fkeys );
+
+		var tracks = [];
+
+		tracks.push( new THREE.VectorKeyframeTrack( '.position', pkeys ) );
+		tracks.push( new THREE.VectorKeyframeTrack( '.center', ckeys ) );
+		tracks.push( new THREE.VectorKeyframeTrack( '.up', ukeys ) );
+		tracks.push( new THREE.NumberKeyframeTrack( '.fov', fkeys ) );
+
+		camera.center = new THREE.Vector3( 0, 0, 0 );
+		camera.animations = [];
+		camera.animations.push( new THREE.AnimationClip( 'cameraAnimation', -1, tracks ) );
+
+	};
+
+	initAnimation();
 
 };
 
@@ -1338,7 +1461,7 @@ THREE.MMDLoader.prototype.parseVmd = function ( buffer ) {
 			p.position = dv.getFloat32Array( 3 );
 			p.rotation = dv.getFloat32Array( 3 );
 			p.interpolation = dv.getUint8Array( 24 );
-			p.angle = dv.getUint32();
+			p.fov = dv.getUint32();
 			p.perspective = dv.getUint8();
 			return p;
 
@@ -2320,18 +2443,6 @@ THREE.MMDLoader.prototype.createAnimation = function ( mesh, vmd ) {
 
 			}
 
-			k = keys[ keys.length - 1 ];
-
-			if ( k.time < maxTime ) {
-
-				keys.push( { time: maxTime,
-				             pos: [ k.pos[ 0 ], k.pos[ 1 ], k.pos[ 2 ] ],
-				             rot: [ k.rot[ 0 ], k.rot[ 1 ], k.rot[ 2 ], k.rot[ 3 ] ],
-				             scl: [ 1, 1, 1 ]
-			        	   } );
-
-			}
-
 		}
 
 //		mesh.geometry.animation = animation;
@@ -2413,11 +2524,6 @@ THREE.MMDLoader.prototype.createAnimation = function ( mesh, vmd ) {
 
 		// add 2 secs as afterglow
 		maxTime += 2.0;
-
-		// use animation's length if exists. animation is master.
-		maxTime = ( mesh.geometry.animation !== undefined &&
-		            mesh.geometry.animation.length > 0.0 )
-		                ? mesh.geometry.animation.length : maxTime;
 		morphAnimation.length = maxTime;
 
 		for ( var i = 0; i < orderedMorphs.length; i++ ) {
@@ -2435,14 +2541,6 @@ THREE.MMDLoader.prototype.createAnimation = function ( mesh, vmd ) {
 			if ( k.time !== 0.0 ) {
 
 				keys.unshift( { time: 0.0, value: k.value } );
-
-			}
-
-			k = keys[ keys.length - 1 ];
-
-			if ( k.time < maxTime ) {
-
-				keys.push( { time: maxTime, value: k.value } );
 
 			}
 
@@ -3169,14 +3267,12 @@ THREE.MMDHelper = function ( renderer ) {
 	this.renderer = renderer;
 
 	this.meshes = [];
-	this.mixers = [];
-	this.ikSolvers = [];
-	this.physicses = [];
 
-	this.runAnimation = true;
-	this.runIk = true;
-	this.runPhysics = true;
-	this.drawOutline = true;
+	this.doAnimation = true;
+	this.doIk = true;
+	this.doPhysics = true;
+	this.doOutlineDrawing = true;
+	this.doCameraAnimation = true;
 
 	this.init();
 
@@ -3202,10 +3298,10 @@ THREE.MMDHelper.prototype = {
 
 	add: function ( mesh ) {
 
+		mesh.mixer = null;
+		mesh.ikSolver = null;
+		mesh.physics = null;
 		this.meshes.push( mesh );
-		this.mixers.push( null );
-		this.ikSolvers.push( null );
-		this.physicses.push( null );
 
 	},
 
@@ -3213,17 +3309,16 @@ THREE.MMDHelper.prototype = {
 
 		for ( var i = 0; i < this.meshes.length; i++ ) {
 
-			this.setPhysics( i );
+			this.setPhysics( this.meshes[ i ] );
 
 		}
 
 	},
 
-	setPhysics: function ( n ) {
+	setPhysics: function ( mesh ) {
 
-		var mesh = this.meshes[ n ];
-		this.physicses[ n ] = new THREE.MMDPhysics( mesh );
-		this.physicses[ n ].warmup( 10 );
+		mesh.physics = new THREE.MMDPhysics( mesh );
+		mesh.physics.warmup( 10 );
 
 	},
 
@@ -3231,38 +3326,119 @@ THREE.MMDHelper.prototype = {
 
 		for ( var i = 0; i < this.meshes.length; i++ ) {
 
-			this.setAnimation( i );
+			this.setAnimation( this.meshes[ i ] );
 
 		}
 
 	},
 
-	setAnimation: function ( n ) {
-
-		var mesh = this.meshes[ n ];
+	setAnimation: function ( mesh ) {
 
 		if ( mesh.geometry.animations !== undefined ||
 		     mesh.geometry.morphAnimations !== undefined ) {
 
-			this.mixers[ n ] = new THREE.AnimationMixer( mesh );
+			mesh.mixer = new THREE.AnimationMixer( mesh );
 
 		}
 
 		if ( mesh.geometry.animations !== undefined ) {
 
-			this.mixers[ n ].addAction( new THREE.AnimationAction( mesh.geometry.animations[ 0 ] ) );
+			mesh.mixer.addAction( new THREE.AnimationAction( mesh.geometry.animations[ 0 ] ) );
 
 		}
 
 		if ( mesh.geometry.morphAnimations !== undefined ) {
 
-			this.mixers[ n ].addAction( new THREE.AnimationAction( mesh.geometry.morphAnimations[ 0 ] ) ) ;
+			mesh.mixer.addAction( new THREE.AnimationAction( mesh.geometry.morphAnimations[ 0 ] ) ) ;
 
 		}
 
 		if ( mesh.geometry.animations !== undefined ) {
 
-			this.ikSolvers[ n ] = new THREE.CCDIKSolver( mesh );
+			mesh.ikSolver = new THREE.CCDIKSolver( mesh );
+
+		}
+
+	},
+
+	setCameraAnimation: function ( camera ) {
+
+		if ( camera.animations !== undefined ) {
+
+			camera.mixer = new THREE.AnimationMixer( camera );
+			camera.mixer.addAction( new THREE.AnimationAction( camera.animations[ 0 ] ) );
+
+		}
+
+	},
+
+	unifyAnimationDuration: function ( camera ) {
+
+		var max = 0.0;
+
+		for ( var i = 0; i < this.meshes.length; i++ ) {
+
+			var mesh = this.meshes[ i ];
+			var mixer = mesh.mixer;
+
+			if ( mixer === null || mesh === undefined ) {
+
+				continue;
+
+			}
+
+			for ( var j = 0; j < mixer.actions.length; j++ ) {
+
+				var action = mixer.actions[ j ];
+				max = Math.max( max, action.clip.duration );
+
+			}
+
+		}
+
+		if ( camera !== null && camera !== undefined && camera.mixer !== undefined ) {
+
+			var mixer = camera.mixer;
+
+			for ( var i = 0; i < mixer.actions.length; i++ ) {
+
+				var action = mixer.actions[ i ];
+				max = Math.max( max, action.clip.duration );
+
+			}
+
+		}
+
+		for ( var i = 0; i < this.meshes.length; i++ ) {
+
+			var mesh = this.meshes[ i ];
+			var mixer = mesh.mixer;
+
+			if ( mixer === null || mesh === undefined ) {
+
+				continue;
+
+			}
+
+			for ( var j = 0; j < mixer.actions.length; j++ ) {
+
+				var action = mixer.actions[ j ];
+				action.clip.duration = max;
+
+			}
+
+		}
+
+		if ( camera !== null && camera !== undefined && camera.mixer !== undefined ) {
+
+			var mixer = camera.mixer;
+
+			for ( var i = 0; i < mixer.actions.length; i++ ) {
+
+				var action = mixer.actions[ i ];
+				action.clip.duration = max;
+
+			}
 
 		}
 
@@ -3272,33 +3448,47 @@ THREE.MMDHelper.prototype = {
 
 		for ( var i = 0; i < this.meshes.length; i++ ) {
 
-			this.animateOneMesh( delta, i );
+			this.animateOneMesh( delta, this.meshes[ i ] );
 
 		}
 
 	},
 
-	animateOneMesh: function ( delta, n ) {
+	animateOneMesh: function ( delta, mesh ) {
 
-		var mixer = this.mixers[ n ];
-		var ikSolver = this.ikSolvers[ n ];
-		var physics = this.physicses[ n ];
+		var mixer = mesh.mixer;
+		var ikSolver = mesh.ikSolver;
+		var physics = mesh.physics;
 
-		if ( mixer !== null && this.runAnimation === true ) {
+		if ( mixer !== null && this.doAnimation === true ) {
 
 			mixer.update( delta );
 
 		}
 
-		if ( ikSolver !== null && this.runIk === true ) {
+		if ( ikSolver !== null && this.doIk === true ) {
 
 			ikSolver.update();
 
 		}
 
-		if ( physics !== null && this.runPhysics === true ) {
+		if ( physics !== null && this.doPhysics === true ) {
 
 			physics.update( delta );
+
+		}
+
+	},
+
+	animateCamera: function ( delta, camera ) {
+
+		var mixer = camera.mixer;
+
+		if ( mixer !== null && mixer !== undefined &&
+		     camera.center !== undefined && this.doCameraAnimation === true ) {
+
+			mixer.update( delta );
+			camera.lookAt( camera.center );
 
 		}
 
@@ -3312,7 +3502,7 @@ THREE.MMDHelper.prototype = {
 
 		this.renderMain( scene, camera );
 
-		if ( this.drawOutline ) {
+		if ( this.doOutlineDrawing ) {
 
 			this.renderOutline( scene, camera );
 
@@ -3344,15 +3534,13 @@ THREE.MMDHelper.prototype = {
 
 		for ( var i = 0; i < this.meshes.length; i++ ) {
 
-			this.setupMainRenderingOneMesh( i );
+			this.setupMainRenderingOneMesh( this.meshes[ i ] );
 
 		}
 
 	},
 
-	setupMainRenderingOneMesh: function ( n ) {
-
-		var mesh = this.meshes[ n ];
+	setupMainRenderingOneMesh: function ( mesh ) {
 
 		for ( var i = 0; i < mesh.material.materials.length; i++ ) {
 
@@ -3368,15 +3556,13 @@ THREE.MMDHelper.prototype = {
 
 		for ( var i = 0; i < this.meshes.length; i++ ) {
 
-			this.setupOutlineRenderingOneMesh( i );
+			this.setupOutlineRenderingOneMesh( this.meshes[ i ] );
 
 		}
 
 	},
 
-	setupOutlineRenderingOneMesh: function ( n ) {
-
-		var mesh = this.meshes[ n ];
+	setupOutlineRenderingOneMesh: function ( mesh ) {
 
 		for ( var i = 0; i < mesh.material.materials.length; i++ ) {
 
