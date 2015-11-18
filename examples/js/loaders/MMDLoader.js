@@ -28,7 +28,6 @@
  * TODO
  *  - vpd file support.
  *  - light motion in vmd support.
- *  - music support.
  *  - SDEF support.
  *  - uv/material/bone morphing support.
  *  - supply skinning support.
@@ -127,6 +126,30 @@ THREE.MMDLoader.prototype.loadVmds = function ( urls, callback, onProgress, onEr
 	};
 
 	run();
+
+};
+
+THREE.MMDLoader.prototype.loadAudio = function ( url, callback, onProgress, onError ) {
+
+	var listener = new THREE.AudioListener();
+	var audio = new THREE.Audio( listener );
+	audio.load( url );
+
+	function polling () {
+
+		if ( audio.source.buffer === null ) {
+
+			setTimeout( polling, 0 );
+
+		} else {
+
+			callback( audio );
+
+		}
+
+	};
+
+	setTimeout( polling, 0 );
 
 };
 
@@ -3262,6 +3285,90 @@ THREE.ShaderLib[ 'mmd' ] = {
 
 };
 
+THREE.MMDAudioManager = function ( audio, p ) {
+
+	var params = ( p === null || p === undefined ) ? {} : p;
+
+	this.audio = audio;
+
+	this.elapsedTime = 0.0;
+	this.currentTime = 0.0;
+	this.delayTime = params.delayTime !== undefined ? params.delayTime : 0.0;
+
+	this.audioDuration = this.audio.source.buffer.duration;
+	this.duration = this.audioDuration + this.delayTime;
+
+};
+
+THREE.MMDAudioManager.prototype = {
+
+	constructor: THREE.MMDAudioManager,
+
+	control: function ( delta ) {
+
+		this.elapsed += delta;
+		this.currentTime += delta;
+
+		if ( this.checkIfStopAudio() ) {
+
+			this.audio.stop();
+
+		}
+
+		if ( this.checkIfStartAudio() ) {
+
+			this.audio.play();
+
+		}
+
+	},
+
+	checkIfStartAudio: function () {
+
+		if ( this.audio.isPlaying ) {
+
+			return false;
+
+		}
+
+		while ( this.currentTime >= this.duration ) {
+
+			this.currentTime -= this.duration;
+
+		}
+
+		if ( this.currentTime < this.delayTime ) {
+
+			return false;
+
+		}
+
+		this.audio.startTime = this.currentTime - this.delayTime;
+
+		return true;
+
+	},
+
+	checkIfStopAudio: function () {
+
+		if ( ! this.audio.isPlaying ) {
+
+			return false;
+
+		}
+
+		if ( this.currentTime >= this.duration ) {
+
+			return true;
+
+		}
+
+		return false;
+
+	}
+
+};
+
 THREE.MMDHelper = function ( renderer ) {
 
 	this.renderer = renderer;
@@ -3273,6 +3380,9 @@ THREE.MMDHelper = function ( renderer ) {
 	this.doPhysics = true;
 	this.doOutlineDrawing = true;
 	this.doCameraAnimation = true;
+
+	this.audioManager = null;
+	this.camera = null;
 
 	this.init();
 
@@ -3302,6 +3412,18 @@ THREE.MMDHelper.prototype = {
 		mesh.ikSolver = null;
 		mesh.physics = null;
 		this.meshes.push( mesh );
+
+	},
+
+	setAudio: function ( audio, params ) {
+
+		this.audioManager = new THREE.MMDAudioManager( audio, params );
+
+	},
+
+	setCamera: function ( camera ) {
+
+		this.camera = camera;
 
 	},
 
@@ -3372,10 +3494,13 @@ THREE.MMDHelper.prototype = {
 
 	},
 
-	unifyAnimationDuration: function ( camera ) {
+	unifyAnimationDuration: function () {
 
 		var max = 0.0;
 
+		var camera = this.camera;
+		var audioManager = this.audioManager;
+
 		for ( var i = 0; i < this.meshes.length; i++ ) {
 
 			var mesh = this.meshes[ i ];
@@ -3396,7 +3521,7 @@ THREE.MMDHelper.prototype = {
 
 		}
 
-		if ( camera !== null && camera !== undefined && camera.mixer !== undefined ) {
+		if ( camera !== null && camera.mixer !== undefined ) {
 
 			var mixer = camera.mixer;
 
@@ -3406,6 +3531,12 @@ THREE.MMDHelper.prototype = {
 				max = Math.max( max, action.clip.duration );
 
 			}
+
+		}
+
+		if ( audioManager !== null ) {
+
+			max = Math.max( max, audioManager.duration );
 
 		}
 
@@ -3429,7 +3560,7 @@ THREE.MMDHelper.prototype = {
 
 		}
 
-		if ( camera !== null && camera !== undefined && camera.mixer !== undefined ) {
+		if ( camera !== null && camera.mixer !== undefined ) {
 
 			var mixer = camera.mixer;
 
@@ -3439,18 +3570,40 @@ THREE.MMDHelper.prototype = {
 				action.clip.duration = max;
 
 			}
+
+		}
+
+		if ( audioManager !== null ) {
+
+			audioManager.duration = max;
 
 		}
 
 	},
 
+	controlAudio: function ( delta ) {
+
+		if ( this.audioManager === null ) {
+
+			return;
+
+		}
+
+		this.audioManager.control( delta );
+
+	},
+
 	animate: function ( delta ) {
+
+		this.controlAudio( delta );
 
 		for ( var i = 0; i < this.meshes.length; i++ ) {
 
 			this.animateOneMesh( delta, this.meshes[ i ] );
 
 		}
+
+		this.animateCamera( delta );
 
 	},
 
@@ -3480,15 +3633,21 @@ THREE.MMDHelper.prototype = {
 
 	},
 
-	animateCamera: function ( delta, camera ) {
+	animateCamera: function ( delta ) {
 
-		var mixer = camera.mixer;
+		if ( this.camera === null ) {
+
+			return;
+
+		}
+
+		var mixer = this.camera.mixer;
 
 		if ( mixer !== null && mixer !== undefined &&
-		     camera.center !== undefined && this.doCameraAnimation === true ) {
+		     this.camera.center !== undefined && this.doCameraAnimation === true ) {
 
 			mixer.update( delta );
-			camera.lookAt( camera.center );
+			this.camera.lookAt( this.camera.center );
 
 		}
 
