@@ -84,6 +84,8 @@
 				directionalLight.position.set( -1, 1, 1 ).normalize();
 				scene.add( directionalLight );
 
+				createGround();
+
 				//
 
 				renderer = new THREE.WebGLRenderer();
@@ -213,6 +215,25 @@
 				}
 
 			}
+
+			function createGround () {
+
+				var geometry = new THREE.CircleGeometry( 150, 32 );
+				geometry.computeFaceNormals();
+				geometry.computeVertexNormals();
+
+				var material = new THREE.MeshPhongMaterial( {
+				                     color: 0x44EEAA,
+				                   } );
+
+				var ground = new THREE.Mesh( geometry, material );
+				ground.castShadow = false;
+				ground.receiveShadow = true;
+				ground.rotation.x = Math.PI / -2;
+
+				scene.add( ground );
+
+			};
 
 			// easy mobile device detection
 			function isMobileDevice () {
