@@ -143,9 +143,11 @@
 						loader.pourVmdIntoCamera( camera, vmd );
 						helper.setCameraAnimation( camera );
 
-						loader.loadAudio( audioFile, function ( audio ) {
+						loader.loadAudio( audioFile, function ( audio, listener ) {
 
-							helper.setAudio( audio, audioParams );
+							listener.position.z = 1;
+
+							helper.setAudio( audio, listener, audioParams );
 
 							/*
 							 * Note: call this method after you set all animations
@@ -153,6 +155,8 @@
 							 */
 							helper.unifyAnimationDuration();
 
+							scene.add( audio );
+							scene.add( listener );
 							scene.add( mesh );
 
 							ready = true;

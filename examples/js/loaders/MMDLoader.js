@@ -133,6 +133,7 @@ THREE.MMDLoader.prototype.loadAudio = function ( url, callback, onProgress, onEr
 
 	var listener = new THREE.AudioListener();
 	var audio = new THREE.Audio( listener );
+
 	audio.load( url );
 
 	function polling () {
@@ -143,7 +144,7 @@ THREE.MMDLoader.prototype.loadAudio = function ( url, callback, onProgress, onEr
 
 		} else {
 
-			callback( audio );
+			callback( audio, listener );
 
 		}
 
@@ -3308,11 +3309,12 @@ THREE.ShaderLib[ 'mmd' ] = {
 
 };
 
-THREE.MMDAudioManager = function ( audio, p ) {
+THREE.MMDAudioManager = function ( audio, listener, p ) {
 
 	var params = ( p === null || p === undefined ) ? {} : p;
 
 	this.audio = audio;
+	this.listener = listener;
 
 	this.elapsedTime = 0.0;
 	this.currentTime = 0.0;
@@ -3438,9 +3440,9 @@ THREE.MMDHelper.prototype = {
 
 	},
 
-	setAudio: function ( audio, params ) {
+	setAudio: function ( audio, listener, params ) {
 
-		this.audioManager = new THREE.MMDAudioManager( audio, params );
+		this.audioManager = new THREE.MMDAudioManager( audio, listener, params );
 
 	},
 
