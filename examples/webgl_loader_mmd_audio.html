@@ -134,17 +134,21 @@
 
 					}
 
-					scene.add( mesh );
+					loader.loadAudio( audioFile, function ( audio, listener ) {
 
-					loader.loadAudio( audioFile, function ( audio ) {
+						listener.position.z = 1;
 
-						helper.setAudio( audio, audioParams );
+						helper.setAudio( audio, listener, audioParams );
 
 						/*
 						 * Note: call this method after you set all animations
 						 *       including camera and audio.
 						 */
 						helper.unifyAnimationDuration();
+
+						scene.add( audio );
+						scene.add( listener );
+						scene.add( mesh );
 
 						ready = true;
 
