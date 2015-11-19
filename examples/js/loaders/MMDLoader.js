@@ -210,6 +210,28 @@ THREE.MMDLoader.prototype.pourVmdIntoCamera = function ( camera, vmd ) {
 
 		function pushKey ( keys, time, value ) {
 
+			/*
+			 * Note: This is a workaround not to make Animation system calculate lerp
+			 *       if the diff from the last frame is 1 frame (in 30fps).
+			 */
+			if ( keys.length > 0 ) {
+
+				var k = keys[ keys.length - 1 ];
+
+				if ( time < k.time + ( 1 / 30 ) * 1.5 ) {
+
+					keys.push(
+						{
+							time: time - 1e-12,
+							value: k.value.clone === undefined ? k.value : k.value.clone()
+						}
+					);
+
+
+				}
+
+			}
+
 			keys.push(
 				{
 					time: time,
@@ -243,7 +265,7 @@ THREE.MMDLoader.prototype.pourVmdIntoCamera = function ( camera, vmd ) {
 				keys.unshift(
 					{
 						time: 0.0,
-						value: k.value.clone === undefined ? k.value : k.value.cone()
+						value: k.value.clone === undefined ? k.value : k.value.clone()
 					}
 				);
 
@@ -2008,11 +2030,12 @@ THREE.MMDLoader.prototype.createMesh = function ( model, texturePath, onProgress
 			params.specular = color.fromArray( [ m.specular[ 0 ], m.specular[ 1 ], m.specular[ 2 ] ] ).getHex();
 			params.shininess = m.shininess;
 
-			if ( params.opacity < 1 ) {
+			// always transparent so far.
+			//if ( params.opacity < 1 ) {
 
 				params.transparent = true;
 
-			}
+			//}
 
 			// temporal workaround
 			// TODO: implement correctly
