@@ -154,6 +154,20 @@ THREE.MMDLoader.prototype.loadAudio = function ( url, callback, onProgress, onEr
 
 };
 
+THREE.MMDLoader.prototype.loadVpd = function ( url, callback, onProgress, onError, params ) {
+
+	var scope = this;
+
+	var func = params && params.charcode === 'unicode' ? this.loadFileAsText : this.loadFileAsShiftJISText;
+
+	func( url, function ( text ) {
+
+		callback( scope.parseVpd( text ) );
+
+	}, onProgress, onError );
+
+};
+
 THREE.MMDLoader.prototype.mergeVmds = function ( vmds ) {
 
 	var v = {};
@@ -365,16 +379,68 @@ THREE.MMDLoader.prototype.extractExtension = function ( url ) {
 
 };
 
-THREE.MMDLoader.prototype.loadFileAsBuffer = function ( url, onLoad, onProgress, onError ) {
+THREE.MMDLoader.prototype.loadFile = function ( url, onLoad, onProgress, onError, responseType ) {
 
 	var loader = new THREE.XHRLoader( this.manager );
-	loader.setCrossOrigin( this.crossOrigin );
-	loader.setResponseType( 'arraybuffer' );
-	loader.load( url, function ( buffer ) {
 
-		onLoad( buffer );
+	loader.setCrossOrigin( this.crossOrigin );
+	loader.setResponseType( responseType );
+
+	loader.load( url, function ( result ) {
+
+		onLoad( result );
 
 	}, onProgress, onError );
+
+};
+
+THREE.MMDLoader.prototype.loadFileAsText = function ( url, onLoad, onProgress, onError ) {
+
+	this.loadFile( url, onLoad, onProgress, onError, 'text' );
+
+};
+
+THREE.MMDLoader.prototype.loadFileAsBuffer = function ( url, onLoad, onProgress, onError ) {
+
+	this.loadFile( url, onLoad, onProgress, onError, 'arraybuffer' );
+
+};
+
+THREE.MMDLoader.prototype.loadFileAsShiftJISText = function ( url, onLoad, onProgress, onError ) {
+
+	var request = new XMLHttpRequest();
+	request.open( 'GET', url, true );
+
+	request.addEventListener( 'load', function ( event ) {
+
+		var response = event.target.response;
+
+		if ( onLoad ) onLoad( response );
+
+	}, false );
+
+	if ( onProgress !== undefined ) {
+
+		request.addEventListener( 'progress', function ( event ) {
+
+			onProgress( event );
+
+		}, false );
+
+	}
+
+	request.addEventListener( 'error', function ( event ) {
+
+		if ( onError ) onError( event );
+
+	}, false );
+
+	request.responseType = 'text';
+	request.overrideMimeType( 'text/plain; charset=shift_jis' );
+
+	request.send( null );
+
+	return request;
 
 };
 
@@ -1533,6 +1599,218 @@ THREE.MMDLoader.prototype.parseVmd = function ( buffer ) {
 	// console.log( vmd ); // for console debug
 
 	return vmd;
+
+};
+
+THREE.MMDLoader.prototype.parseVpd = function ( text ) {
+
+	var vpd = {};
+
+	vpd.metadata = {};
+	vpd.metadata.coordinateSystem = 'left';
+
+	vpd.bones = [];
+
+	var commentPatternG = /\/\/\w*(\r|\n|\r\n)/g;
+	var newlinePattern = /\r|\n|\r\n/;
+
+	var lines = text.replace( commentPatternG, '' ).split( newlinePattern );
+
+	function throwError () {
+
+		throw 'the file seems not vpd file.';
+
+	};
+
+	function checkMagic () {
+
+		if ( lines[ 0 ] !== 'Vocaloid Pose Data file' ) {
+
+			throwError();
+
+		}
+
+	};
+
+	function parseHeader () {
+
+		if ( lines.length < 4 ) {
+
+			throwError();
+
+		}
+
+		vpd.metadata.parentFile = lines[ 2 ];
+		vpd.metadata.boneCount = parseInt( lines[ 3 ] );
+
+	};
+
+	function parseBones () {
+
+		var boneHeaderPattern = /^\s*(Bone[0-9]+)\s*\{\s*(.*)$/;
+		var boneVectorPattern = /^\s*(-?[0-9]+\.[0-9]+)\s*,\s*(-?[0-9]+\.[0-9]+)\s*,\s*(-?[0-9]+\.[0-9]+)\s*;/;
+		var boneQuaternionPattern = /^\s*(-?[0-9]+\.[0-9]+)\s*,\s*(-?[0-9]+\.[0-9]+)\s*,\s*(-?[0-9]+\.[0-9]+)\s*,\s*(-?[0-9]+\.[0-9]+)\s*;/;
+		var boneFooterPattern = /^\s*}/;
+
+		var bones = vpd.bones;
+		var n = null;
+		var v = null;
+		var q = null;
+
+		var encoder = new CharsetEncoder();
+
+		for ( var i = 4; i < lines.length; i++ ) {
+
+			var line = lines[ i ];
+
+			var result;
+
+			result = line.match( boneHeaderPattern );
+
+			if ( result !== null ) {
+
+				if ( n !== null ) {
+
+					throwError();
+
+				}
+
+				n = result[ 2 ];
+
+			}
+
+			result = line.match( boneVectorPattern );
+
+			if ( result !== null ) {
+
+				if ( v !== null ) {
+
+					throwError();
+
+				}
+
+				v = [
+
+					parseFloat( result[ 1 ] ),
+					parseFloat( result[ 2 ] ),
+					parseFloat( result[ 3 ] )
+
+				];
+
+			}
+
+			result = line.match( boneQuaternionPattern );
+
+			if ( result !== null ) {
+
+				if ( q !== null ) {
+
+					throwError();
+
+				}
+
+				q = [
+
+					parseFloat( result[ 1 ] ),
+					parseFloat( result[ 2 ] ),
+					parseFloat( result[ 3 ] ),
+					parseFloat( result[ 4 ] )
+
+				];
+
+
+			}
+
+			result = line.match( boneFooterPattern );
+
+			if ( result !== null ) {
+
+				if ( n === null || v === null || q === null ) {
+
+					throwError();
+
+				}
+
+				bones.push( {
+
+					originalName: n,
+					name: toCharcodeStrings( n ),
+					translation: v,
+					quaternion: q
+
+				} );
+
+				n = null;
+				v = null;
+				q = null;
+
+			}
+
+		}
+
+		if ( n !== null || v !== null || q !== null ) {
+
+			throwError();
+
+		}
+
+	};
+
+	function toCharcodeStrings ( s ) {
+
+		var str = '';
+
+		for ( var i = 0; i < s.length; i++ ) {
+
+			str += '0x' + ( '0000' + s[ i ].charCodeAt().toString( 16 ) ).substr( -4 );
+
+		}
+
+		return str;
+
+	};
+
+	var leftToRight = function() {
+
+		var convertVector = function ( v ) {
+
+			v[ 2 ] = -v[ 2 ];
+
+		};
+
+		var convertQuaternion = function ( q ) {
+
+			q[ 0 ] = -q[ 0 ];
+			q[ 1 ] = -q[ 1 ];
+
+		};
+
+		if ( vpd.metadata.coordinateSystem === 'right' ) {
+
+			return;
+
+		}
+
+		vpd.metadata.coordinateSystem = 'right';
+
+		for ( var i = 0; i < vpd.bones.length; i++ ) {
+
+			convertVector( vpd.bones[ i ].translation );
+			convertQuaternion( vpd.bones[ i ].quaternion );
+
+		}
+
+	};
+
+
+	checkMagic();
+	parseHeader();
+	parseBones();
+	leftToRight();
+
+	// console.log( vpd );  // for console debug
+
+	return vpd;
 
 };
 
@@ -3438,6 +3716,8 @@ THREE.MMDHelper.prototype = {
 		mesh.physics = null;
 		this.meshes.push( mesh );
 
+		this.saveOriginalBones( mesh );
+
 	},
 
 	setAudio: function ( audio, listener, params ) {
@@ -3755,6 +4035,82 @@ THREE.MMDHelper.prototype = {
 			m.side = THREE.BackSide;
 
 		}
+
+	},
+
+	saveOriginalBones: function ( mesh ) {
+
+		var bones = mesh.skeleton.bones;
+		var bones2 = [];
+
+		for ( var i = 0; i < bones.length; i++ ) {
+
+			bones2.push( bones[ i ].clone() );
+
+		}
+
+		mesh.skeleton.originalBones = bones2;
+
+	},
+
+	resetBones: function ( mesh ) {
+
+		var bones = mesh.skeleton.bones;
+		var bones2 = mesh.skeleton.originalBones;
+
+		for ( var i = 0; i < bones.length; i++ ) {
+
+			bones[ i ].position.copy( bones2[ i ].position );
+			bones[ i ].quaternion.copy( bones2[ i ].quaternion );
+
+		}
+
+	},
+
+	moveBoneAsVpd: function ( mesh, vpd ) {
+
+		var bones = mesh.skeleton.bones;
+		var bones2 = vpd.bones;
+
+		var table = {};
+
+		for ( var i = 0; i < bones.length; i++ ) {
+
+			var b = bones[ i ];
+			table[ b.name ] = i;
+
+		}
+
+		var thV = new THREE.Vector3();
+		var thQ = new THREE.Quaternion();
+
+		for ( var i = 0; i < bones2.length; i++ ) {
+
+			var b = bones2[ i ];
+			var index = table[ b.name ];
+
+			if ( index === undefined ) {
+
+				continue;
+
+			}
+
+			var b2 = bones[ index ];
+			var t = b.translation;
+			var q = b.quaternion;
+
+			thV.set( t[ 0 ], t[ 1 ], t[ 2 ] );
+			thQ.set( q[ 0 ], q[ 1 ], q[ 2 ], q[ 3 ] );
+
+			b2.position.add( thV );
+			b2.quaternion.multiply( thQ );
+
+			b2.updateMatrixWorld( true );
+
+		}
+
+		var solver = new THREE.CCDIKSolver( mesh );
+		solver.update();
 
 	}
 
