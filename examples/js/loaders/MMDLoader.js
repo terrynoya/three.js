@@ -26,7 +26,6 @@
  *
  *
  * TODO
- *  - vpd file support.
  *  - light motion in vmd support.
  *  - SDEF support.
  *  - uv/material/bone morphing support.
@@ -237,7 +236,7 @@ THREE.MMDLoader.prototype.pourVmdIntoCamera = function ( camera, vmd ) {
 
 					keys.push(
 						{
-							time: time - 1e-12,
+							time: time - 1e-13,
 							value: k.value.clone === undefined ? k.value : k.value.clone()
 						}
 					);
@@ -3732,19 +3731,19 @@ THREE.MMDHelper.prototype = {
 
 	},
 
-	setPhysicses: function () {
+	setPhysicses: function ( params ) {
 
 		for ( var i = 0; i < this.meshes.length; i++ ) {
 
-			this.setPhysics( this.meshes[ i ] );
+			this.setPhysics( this.meshes[ i ], params );
 
 		}
 
 	},
 
-	setPhysics: function ( mesh ) {
+	setPhysics: function ( mesh, params ) {
 
-		mesh.physics = new THREE.MMDPhysics( mesh );
+		mesh.physics = new THREE.MMDPhysics( mesh, params );
 		mesh.physics.warmup( 10 );
 
 	},
