@@ -2592,6 +2592,33 @@ THREE.MMDLoader.prototype.createMesh = function ( model, texturePath, onProgress
 
 	};
 
+	function saveBindPoseBones ( mesh ) {
+
+		var bones = mesh.skeleton.bones;
+		var bones2 = [];
+
+		for ( var i = 0; i < bones.length; i++ ) {
+
+			bones2.push( bones[ i ].clone() );
+
+		}
+
+		mesh.skeleton.bindPoseBones = bones2;
+
+	};
+
+	function saveOriginalBoneNames ( mesh ) {
+
+		var bones = mesh.skeleton.bones;
+
+		for ( var i = 0; i < bones.length; i++ ) {
+
+			bones[ i ].originalName = model.bones[ i ].originalName;
+
+		}
+
+	};
+
 	leftToRight();
 	initVartices();
 	initFaces();
@@ -2608,6 +2635,9 @@ THREE.MMDLoader.prototype.createMesh = function ( model, texturePath, onProgress
 	geometry.mmdFormat = model.metadata.format;
 
 	var mesh = new THREE.SkinnedMesh( geometry, material );
+
+	saveBindPoseBones( mesh );
+	saveOriginalBoneNames( mesh );
 
 	// console.log( mesh ); // for console debug
 
@@ -3715,8 +3745,6 @@ THREE.MMDHelper.prototype = {
 		mesh.physics = null;
 		this.meshes.push( mesh );
 
-		this.saveOriginalBones( mesh );
-
 	},
 
 	setAudio: function ( audio, listener, params ) {
@@ -4037,25 +4065,10 @@ THREE.MMDHelper.prototype = {
 
 	},
 
-	saveOriginalBones: function ( mesh ) {
+	resetPose: function ( mesh ) {
 
 		var bones = mesh.skeleton.bones;
-		var bones2 = [];
-
-		for ( var i = 0; i < bones.length; i++ ) {
-
-			bones2.push( bones[ i ].clone() );
-
-		}
-
-		mesh.skeleton.originalBones = bones2;
-
-	},
-
-	resetBones: function ( mesh ) {
-
-		var bones = mesh.skeleton.bones;
-		var bones2 = mesh.skeleton.originalBones;
+		var bones2 = mesh.skeleton.bindPoseBones;
 
 		for ( var i = 0; i < bones.length; i++ ) {
 
@@ -4066,7 +4079,13 @@ THREE.MMDHelper.prototype = {
 
 	},
 
-	moveBoneAsVpd: function ( mesh, vpd ) {
+	poseAsVpd: function ( mesh, vpd, params ) {
+
+		if ( ! ( params && params.preventRestPose === true ) ) {
+
+			this.resetPose( mesh );
+
+		}
 
 		var bones = mesh.skeleton.bones;
 		var bones2 = vpd.bones;
@@ -4105,6 +4124,12 @@ THREE.MMDHelper.prototype = {
 			b2.quaternion.multiply( thQ );
 
 			b2.updateMatrixWorld( true );
+
+		}
+
+		if ( params && params.preventIk === true ) {
+
+			return;
 
 		}
 
