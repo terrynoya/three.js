@@ -76,11 +76,15 @@ THREE.MMDLoader.prototype.loadModel = function ( url, callback, onProgress, onEr
 
 	this.loadFileAsBuffer( url, function ( buffer ) {
 
-		var model = scope.parseModel( buffer, modelExtension );
-		var mesh = scope.createMesh( model, texturePath );
-		callback( mesh );
+		callback( scope.createModel( buffer, modelExtension, texturePath ) );
 
 	}, onProgress, onError );
+
+};
+
+THREE.MMDLoader.prototype.createModel = function ( buffer, modelExtension, texturePath ) {
+
+	return this.createMesh( this.parseModel( buffer, modelExtension ), texturePath );
 
 };
 
@@ -135,6 +139,10 @@ THREE.MMDLoader.prototype.loadAudio = function ( url, callback, onProgress, onEr
 
 	audio.load( url );
 
+	/*
+	 * Note: THREE.Audio doesn't support onReady callback r73
+	 *       so doing polling instead.
+	 */
 	function polling () {
 
 		if ( audio.source.buffer === null ) {
@@ -157,7 +165,7 @@ THREE.MMDLoader.prototype.loadVpd = function ( url, callback, onProgress, onErro
 
 	var scope = this;
 
-	var func = params && params.charcode === 'unicode' ? this.loadFileAsText : this.loadFileAsShiftJISText;
+	var func = ( ( params && params.charcode === 'unicode' ) ? this.loadFileAsText : this.loadFileAsShiftJISText ).bind( this );
 
 	func( url, function ( text ) {
 
@@ -385,17 +393,13 @@ THREE.MMDLoader.prototype.loadFile = function ( url, onLoad, onProgress, onError
 	loader.setCrossOrigin( this.crossOrigin );
 	loader.setResponseType( responseType );
 
-	loader.load( url, function ( result ) {
+	var request = loader.load( url, function ( result ) {
 
 		onLoad( result );
 
 	}, onProgress, onError );
 
-};
-
-THREE.MMDLoader.prototype.loadFileAsText = function ( url, onLoad, onProgress, onError ) {
-
-	this.loadFile( url, onLoad, onProgress, onError, 'text' );
+	return request;
 
 };
 
@@ -405,41 +409,23 @@ THREE.MMDLoader.prototype.loadFileAsBuffer = function ( url, onLoad, onProgress,
 
 };
 
+THREE.MMDLoader.prototype.loadFileAsText = function ( url, onLoad, onProgress, onError ) {
+
+	this.loadFile( url, onLoad, onProgress, onError, 'text' );
+
+};
+
 THREE.MMDLoader.prototype.loadFileAsShiftJISText = function ( url, onLoad, onProgress, onError ) {
 
-	var request = new XMLHttpRequest();
-	request.open( 'GET', url, true );
+	var request = this.loadFile( url, onLoad, onProgress, onError, 'text' );
 
-	request.addEventListener( 'load', function ( event ) {
-
-		var response = event.target.response;
-
-		if ( onLoad ) onLoad( response );
-
-	}, false );
-
-	if ( onProgress !== undefined ) {
-
-		request.addEventListener( 'progress', function ( event ) {
-
-			onProgress( event );
-
-		}, false );
-
-	}
-
-	request.addEventListener( 'error', function ( event ) {
-
-		if ( onError ) onError( event );
-
-	}, false );
-
-	request.responseType = 'text';
+	/*
+	 * TODO: some browsers seem not support overrideMimeType
+	 *       so some workarounds for them may be necessary.
+	 * Note: to set property of request after calling request.send(null)
+	 *       (it's called in THREE.XHRLoader.load()) could be a bad manner.
+	 */
 	request.overrideMimeType( 'text/plain; charset=shift_jis' );
-
-	request.send( null );
-
-	return request;
 
 };
 
@@ -2800,7 +2786,13 @@ THREE.MMDLoader.prototype.createAnimation = function ( mesh, vmd ) {
 		}
 
 //		mesh.geometry.animation = animation;
-		mesh.geometry.animations = [];
+
+		if ( mesh.geometry.animations === undefined ) {
+
+			mesh.geometry.animations = [];
+
+		}
+
 		mesh.geometry.animations.push( THREE.AnimationClip.parseAnimation( animation, mesh.geometry.bones ) );
 
 	};
@@ -2911,7 +2903,12 @@ THREE.MMDLoader.prototype.createAnimation = function ( mesh, vmd ) {
 
 		}
 
-		mesh.geometry.morphAnimations = [];
+		if ( mesh.geometry.morphAnimations === undefined ) {
+
+			mesh.geometry.morphAnimations = [];
+
+		}
+
 		mesh.geometry.morphAnimations.push( new THREE.AnimationClip( 'morphAnimation', -1, tracks ) );
 
 	};
@@ -2919,6 +2916,214 @@ THREE.MMDLoader.prototype.createAnimation = function ( mesh, vmd ) {
 	leftToRight();
 	initMotionAnimations();
 	initMorphAnimations();
+
+};
+
+THREE.MMDLoader.DataCreationHelper = function () {
+
+};
+
+THREE.MMDLoader.DataCreationHelper.prototype = {
+
+	constructor: THREE.MMDLoader.Helper,
+
+	leftToRightVector3: function ( v ) {
+
+		v[ 2 ] = -v[ 2 ];
+
+	},
+
+	leftToRightQuaternion = function ( q ) {
+
+		q[ 0 ] = -q[ 0 ];
+		q[ 1 ] = -q[ 1 ];
+
+	},
+
+	leftToRightEuler = function ( r ) {
+
+		r[ 0 ] = -r[ 0 ];
+		r[ 1 ] = -r[ 1 ];
+
+	},
+
+	leftToRightIndexOrder = function ( p ) {
+
+		var tmp = p[ 2 ];
+		p[ 2 ] = p[ 0 ];
+		p[ 0 ] = tmp;
+
+	},
+
+	leftToRightVector3Range = function ( v1, v2 ) {
+
+		var tmp = -v2[ 2 ];
+		v2[ 2 ] = -v1[ 2 ];
+		v1[ 2 ] = tmp;
+
+	},
+
+	leftToRightEulerRange = function ( r1, r2 ) {
+
+		var tmp1 = -r2[ 0 ];
+		var tmp2 = -r2[ 1 ];
+		r2[ 0 ] = -r1[ 0 ];
+		r2[ 1 ] = -r1[ 1 ];
+		r1[ 0 ] = tmp1;
+		r1[ 1 ] = tmp2;
+
+	},
+
+	/*
+         * Note: Sometimes to use Japanese Unicode characters runs into problems in Three.js.
+	 *       In such a case, use this method to convert it to Unicode hex charcode strings,
+         *       like 'あいう' -> '0x30420x30440x3046'
+         */
+	toCharcodeStrings: function ( s ) {
+
+		var str = '';
+
+		for ( var i = 0; i < s.length; i++ ) {
+
+			str += '0x' + ( '0000' + s[ i ].charCodeAt().toString( 16 ) ).substr( -4 );
+
+		}
+
+		return str;
+
+	},
+
+	createDictionary: function ( array ) {
+
+		var dict = {};
+
+		for ( var i = 0; i < array.length; i++ ) {
+
+			dict[ array[ i ].name ] = i;
+
+		}
+
+		return dict;
+
+	},
+
+	initializeMotionArrays: function ( array ) {
+
+		var result = [];
+
+		for ( var i = 0; i < array.length; i++ ) {
+
+			result[ i ] = [];
+
+		}
+
+		return result;
+
+	},
+
+	sortMotionArray: function ( array ) {
+
+		array.sort( function ( a, b ) {
+
+			return a.frameNum - b.frameNum;
+
+		} ) ;
+
+	},
+
+	createMotionArray: function ( array, result ) {
+
+		for ( var i = 0; i < array.length; i++ ) {
+
+			result.push( array[ i ] );
+
+		}
+
+	},
+
+	createMotionArrays: function ( array, result, dict, key ) {
+
+		for ( var i = 0; i < array.length; i++ ) {
+
+			var a = array[ i ];
+			var num = dict[ a[ key ] ];
+
+			if ( num === undefined ) {
+
+				continue;
+
+			}
+
+			result[ num ].push( a );
+
+		}
+
+	},
+
+	pushAnimationKey: function ( keys, time, value, preventLerp ) {
+
+		/*
+		 * Note: This is a workaround not to make Animation system calculate lerp
+		 *       if the diff from the last frame is 1 frame (in 30fps).
+		 */
+		if ( keys.length > 0 && preventLerp === true ) {
+
+			var k = keys[ keys.length - 1 ];
+
+			if ( time < k.time + ( 1 / 30 ) * 1.5 ) {
+
+				keys.push(
+					{
+						time: time - 1e-13,
+						value: k.value.clone === undefined ? k.value : k.value.clone()
+					}
+				);
+
+
+			}
+
+		}
+
+		keys.push(
+			{
+				time: time,
+				value: value
+			}
+		);
+
+	},
+
+	initializeAnimationKey: function ( keys, value ) {
+
+		if ( keys.length === 0 ) {
+
+			pkeys.push(
+				{
+					time: 0.0,
+					value: value
+				}
+			);
+
+		}
+
+	},
+
+	insertStartAnimationKey: function ( keys ) {
+
+		var k = keys[ 0 ];
+
+		if ( k.time !== 0.0 ) {
+
+			keys.unshift(
+				{
+					time: 0.0,
+					value: k.value.clone === undefined ? k.value : k.value.clone()
+				}
+			);
+
+		}
+
+	},
 
 };
 
