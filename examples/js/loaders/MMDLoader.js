@@ -3431,7 +3431,7 @@ THREE.ShaderLib[ 'mmd' ] = {
 		"		float thickness = outlineThickness;",
 		"		float ratio = 1.0;", // TODO: support outline size ratio for each vertex
 		"		vec4 epos = projectionMatrix * modelViewMatrix * skinned;",
-		"		vec4 epos2 = projectionMatrix * modelViewMatrix * vec4( skinned.xyz + transformedNormal, 1.0 );",
+		"		vec4 epos2 = projectionMatrix * modelViewMatrix * vec4( skinned.xyz + objectNormal, 1.0 );",
 		"		vec4 enorm = normalize( epos2 - epos );",
 		"		gl_Position = epos + enorm * thickness * epos.w * ratio;",
 		"	}",
@@ -4004,8 +4004,6 @@ THREE.MMDHelper.prototype = {
 	renderMain: function ( scene, camera ) {
 
 		this.setupMainRendering();
-
-		this.renderer.setFaceCulling( THREE.CullFaceBack, THREE.FrontFaceDirectionCCW );
 		this.renderer.render( scene, camera );
 
 	},
@@ -4013,10 +4011,6 @@ THREE.MMDHelper.prototype = {
 	renderOutline: function ( scene, camera ) {
 
 		this.setupOutlineRendering();
-
-		//this.renderer.setFaceCulling( THREE.CullFaceBack, THREE.FrontFaceDirectionCCW );
-		this.renderer.state.setBlending( THREE.NoBlending );
-
 		this.renderer.render( scene, camera );
 
 	},
@@ -4050,6 +4044,8 @@ THREE.MMDHelper.prototype = {
 			this.setupOutlineRenderingOneMesh( this.meshes[ i ] );
 
 		}
+
+		this.renderer.state.setBlending( THREE.NoBlending );
 
 	},
 
