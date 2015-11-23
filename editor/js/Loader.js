@@ -283,6 +283,27 @@ var Loader = function ( editor ) {
 
 				break;
 
+			case 'pmd':
+
+				var reader = new FileReader();
+				reader.addEventListener( 'load', function ( event ) {
+
+					var contents = event.target.result;
+
+					var loader = new THREE.MMDLoader();
+					loader.setDefaultTexturePath( '../examples/models/mmd/default/' );
+					var model = loader.parsePmd( contents );
+					object = loader.createMesh( model, loader.extractUrlBase( filename ) );
+					object.name = filename;
+
+					editor.addObject( object );
+					editor.select( object );
+
+				}, false );
+				reader.readAsArrayBuffer( file );
+
+				break;
+
 			case 'stl':
 
 				var reader = new FileReader();
