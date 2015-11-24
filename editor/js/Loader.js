@@ -292,8 +292,17 @@ var Loader = function ( editor ) {
 
 					var loader = new THREE.MMDLoader();
 					loader.setDefaultTexturePath( '../examples/models/mmd/default/' );
-					var model = loader.parsePmd( contents );
-					object = loader.createMesh( model, loader.extractUrlBase( filename ) );
+					object = loader.createModel( contents, extension, '../examples/models/mmd/miku/' /*loader.extractUrlBase( filename )*/ );
+
+					var bones = object.skeleton.bones;
+					var bones2 = object.geometry.bones;
+					for ( var i = 0; i < bones.length; i++ ) {
+
+						bones[ i ].name = bones[ i ].originalName;
+						bones2[ i ].name = bones2[ i ].originalName;
+
+					}
+
 					object.name = filename;
 
 					editor.addObject( object );
