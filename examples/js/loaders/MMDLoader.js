@@ -3269,8 +3269,8 @@ THREE.MMDLoader.DataView.prototype = {
 };
 
 /*
- * Custom shaders based on MeshPhongMaterial.
- * This class extends ShaderMaterial while shader is based on MeshPhongMaterial.
+ * MMD custom shaders based on MeshPhongMaterial.
+ * This class extends ShaderMaterial while shaders are based on MeshPhongMaterial.
  * Keep this class updated on MeshPhongMaterial.
  */
 THREE.MMDMaterial = function ( params ) {
@@ -3338,6 +3338,10 @@ THREE.MMDMaterial = function ( params ) {
 THREE.MMDMaterial.prototype = Object.create( THREE.ShaderMaterial.prototype );
 THREE.MMDMaterial.prototype.constructor = THREE.MMDMaterial;
 
+/*
+ * Shaders are copied from MeshPhongMaterial and then MMD spcific codes are inserted.
+ * Keep shares updated on MeshPhongMaterial.
+ */
 THREE.ShaderLib[ 'mmd' ] = {
 
 	uniforms: THREE.UniformsUtils.merge( [
@@ -3359,7 +3363,7 @@ THREE.ShaderLib[ 'mmd' ] = {
 			"shininess": { type: "f", value: 30 }
 		},
 
-		// MMD specific
+		// ---- MMD specific for cel shading(outline drawing and toon mapping)
 		{
 			"outlineDrawing"  : { type: "i", value: 0 },
 			"outlineThickness": { type: "f", value: 0.0 },
@@ -3368,6 +3372,7 @@ THREE.ShaderLib[ 'mmd' ] = {
 			"celShading"      : { type: "i", value: 0 },
 			"toonMap"         : { type: "t", value: null }
 		}
+		// ---- MMD specific for cel shading(outline drawing and toon mapping)
 
 	] ),
 
@@ -3395,9 +3400,10 @@ THREE.ShaderLib[ 'mmd' ] = {
 		THREE.ShaderChunk[ "shadowmap_pars_vertex" ],
 		THREE.ShaderChunk[ "logdepthbuf_pars_vertex" ],
 
-		// MMD specific
+		// ---- MMD specific for outline drawing
 		"	uniform bool outlineDrawing;",
 		"	uniform float outlineThickness;",
+		// ---- MMD specific for outline drawing
 
 		"void main() {",
 
@@ -3431,7 +3437,7 @@ THREE.ShaderLib[ 'mmd' ] = {
 			THREE.ShaderChunk[ "lights_phong_vertex" ],
 			THREE.ShaderChunk[ "shadowmap_vertex" ],
 
-		// MMD specific: outline drawing
+		// ---- MMD specific for outline drawing
 		"	if ( outlineDrawing ) {",
 		"		float thickness = outlineThickness;",
 		"		float ratio = 1.0;", // TODO: support outline size ratio for each vertex
@@ -3440,6 +3446,7 @@ THREE.ShaderLib[ 'mmd' ] = {
 		"		vec4 enorm = normalize( epos2 - epos );",
 		"		gl_Position = epos + enorm * thickness * epos.w * ratio;",
 		"	}",
+		// ---- MMD specific for outline drawing
 
 		"}"
 
@@ -3473,26 +3480,29 @@ THREE.ShaderLib[ 'mmd' ] = {
 		THREE.ShaderChunk[ "specularmap_pars_fragment" ],
 		THREE.ShaderChunk[ "logdepthbuf_pars_fragment" ],
 
-		// MMD specific
+		// ---- MMD specific for cel shading
 		"	uniform bool outlineDrawing;",
 		"	uniform vec3 outlineColor;",
 		"	uniform float outlineAlpha;",
 		"	uniform bool celShading;",
 		"	uniform sampler2D toonMap;",
+		// ---- MMD specific for cel shading
 
-		// MMD specific: toon shadering
+		// ---- MMD specific for toon mapping
 		"	vec3 toon ( vec3 lightDirection, vec3 norm ) {",
 		"		vec2 coord = vec2( 0.0, 0.5 * ( 1.0 - dot( lightDirection, norm ) ) );",
 		"		return texture2D( toonMap, coord ).rgb;",
 		"	}",
+		// ---- MMD specific for toon mapping
 
 		"void main() {",
 
-		// MMD specific: outline drawing
+		// ---- MMD specific for outline drawing
 		"	if ( outlineDrawing ) {",
 		"		gl_FragColor = vec4( outlineColor, outlineAlpha );",
 		"		return;",
 		"	}",
+		// ---- MMD specific for outline drawing
 
 		"	vec3 outgoingLight = vec3( 0.0 );",
 		"	vec4 diffuseColor = vec4( diffuse, opacity );",
@@ -3512,9 +3522,10 @@ THREE.ShaderLib[ 'mmd' ] = {
 			THREE.ShaderChunk[ "aomap_fragment" ],
 			THREE.ShaderChunk[ "emissivemap_fragment" ],
 
+			// Some codes need to be changed for toon mapping
 			//THREE.ShaderChunk[ "lights_phong_fragment" ],
 
-		// MMD specific: toon shadering
+		// ---- THREE.ShaderChunk[ "lights_phong_fragment" ]
 		"	vec3 viewDir = normalize( vViewPosition );",
 		"	vec3 totalDiffuseLight = vec3( 0.0 );",
 		"	vec3 totalSpecularLight = vec3( 0.0 );",
@@ -3530,12 +3541,13 @@ THREE.ShaderLib[ 'mmd' ] = {
 		"		// diffuse",
 		"		float cosineTerm = saturate( dot( normal, lightDir ) );",
 
-		// MMD specific
+		// ---- MMD specific
 		"		if ( celShading ) {",
 		"			totalDiffuseLight += lightColor * toon( lightDir, normal );",
 		"		} else {",
 		"			totalDiffuseLight += lightColor * attenuation * cosineTerm;",
 		"		}",
+		// ---- MMD specific
 
 		"		// specular",
 		"		vec3 brdf = BRDF_BlinnPhong( specular, shininess, normal, lightDir, viewDir );",
@@ -3558,12 +3570,13 @@ THREE.ShaderLib[ 'mmd' ] = {
 		"			// diffuse",
 		"			float cosineTerm = saturate( dot( normal, lightDir ) );",
 
-		// MMD specific
+		// ---- MMD specific
 		"			if ( celShading ) {",
 		"				totalDiffuseLight += lightColor * toon( lightDir, normal );",
 		"			} else {",
 		"				totalDiffuseLight += lightColor * attenuation * cosineTerm;",
 		"			}",
+		// ---- MMD specific
 
 		"			// specular",
 		"			vec3 brdf = BRDF_BlinnPhong( specular, shininess, normal, lightDir, viewDir );",
@@ -3579,18 +3592,20 @@ THREE.ShaderLib[ 'mmd' ] = {
 		"		// diffuse",
 		"		float cosineTerm = saturate( dot( normal, lightDir ) );",
 
-		// MMD specific
+		// ---- MMD specific
 		"		if ( celShading ) {",
 		"			totalDiffuseLight += lightColor * toon( lightDir, normal );",
 		"		} else {",
 		"			totalDiffuseLight += lightColor * cosineTerm;",
 		"		}",
+		// ---- MMD specific
 
 		"		// specular",
 		"		vec3 brdf = BRDF_BlinnPhong( specular, shininess, normal, lightDir, viewDir );",
 		"		totalSpecularLight += brdf * specularStrength * lightColor * cosineTerm;",
 		"	}",
 		"#endif",
+		// ---- THREE.ShaderChunk[ "lights_phong_fragment" ]
 
 			THREE.ShaderChunk[ "shadowmap_fragment" ],
 
