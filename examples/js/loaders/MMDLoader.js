@@ -254,11 +254,11 @@ THREE.MMDLoader.prototype.pourVmdIntoCamera = function ( camera, vmd ) {
 			var center = new THREE.Vector3( p[ 0 ], p[ 1 ], p[ 2 ] );
 			var up = new THREE.Vector3( 0, 1, 0 );
 
-			e.set( r[ 0 ], r[ 1 ], r[ 2 ] );
+			e.set( r[ 0 ], r[ 1 ], -r[ 2 ] );
 			q.setFromEuler( e );
 
-			position.applyQuaternion( q );
 			position.add( center );
+			position.applyQuaternion( q );
 
 			up.applyQuaternion( q );
 
@@ -3999,6 +3999,7 @@ THREE.MMDHelper.prototype = {
 		     this.camera.center !== undefined && this.doCameraAnimation === true ) {
 
 			mixer.update( delta );
+			this.camera.updateProjectionMatrix();
 			this.camera.lookAt( this.camera.center );
 
 		}
