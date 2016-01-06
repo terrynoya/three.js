@@ -377,4 +377,4 @@ THREE.TriangleStripDrawMode = 1;
 THREE.TriangleFanDrawMode = 2;
 
 // SIMD
-THREE.UseSIMD = 'undefined' !== SIMD;
+THREE.UseSIMD = 'undefined' !== typeof SIMD;
