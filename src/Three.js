@@ -375,3 +375,6 @@ THREE.WrapAroundEnding = 2402;
 THREE.TrianglesDrawMode = 0;
 THREE.TriangleStripDrawMode = 1;
 THREE.TriangleFanDrawMode = 2;
+
+// SIMD
+THREE.UseSIMD = 'undefined' !== SIMD;

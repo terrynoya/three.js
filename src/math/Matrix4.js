@@ -367,7 +367,76 @@ THREE.Matrix4.prototype = {
 
 	},
 
-	multiplyMatrices: function ( a, b ) {
+	multiplyMatrices_SIMD: function ( a, b ) {
+
+		var ae = a.elements;
+		var be = b.elements;
+		var te = this.elements;
+
+		var ae0 = SIMD.Float32x4.load( ae, 0 );
+		var ae1 = SIMD.Float32x4.load( ae, 4 );
+		var ae2 = SIMD.Float32x4.load( ae, 8 );
+		var ae3 = SIMD.Float32x4.load( ae, 12 );
+
+		var be0 = SIMD.Float32x4.load( be, 0 );
+		var be1 = SIMD.Float32x4.load( be, 4 );
+		var be2 = SIMD.Float32x4.load( be, 8 );
+		var be3 = SIMD.Float32x4.load( be, 12 );
+
+		var oe0 = SIMD.Float32x4.add(
+			SIMD.Float32x4.mul( SIMD.Float32x4.swizzle( be0, 0, 0, 0, 0 ), ae0 ),
+			SIMD.Float32x4.add(
+				SIMD.Float32x4.mul( SIMD.Float32x4.swizzle( be0, 1, 1, 1, 1 ), ae1 ),
+				SIMD.Float32x4.add(
+					SIMD.Float32x4.mul( SIMD.Float32x4.swizzle( be0, 2, 2, 2, 2 ), ae2 ),
+					SIMD.Float32x4.mul( SIMD.Float32x4.swizzle( be0, 3, 3, 3, 3 ), ae3 )
+				)
+			)
+		);
+
+		var oe1 = SIMD.Float32x4.add(
+			SIMD.Float32x4.mul( SIMD.Float32x4.swizzle( be1, 0, 0, 0, 0 ), ae0 ),
+			SIMD.Float32x4.add(
+				SIMD.Float32x4.mul( SIMD.Float32x4.swizzle( be1, 1, 1, 1, 1 ), ae1 ),
+				SIMD.Float32x4.add(
+					SIMD.Float32x4.mul( SIMD.Float32x4.swizzle( be1, 2, 2, 2, 2 ), ae2 ),
+					SIMD.Float32x4.mul( SIMD.Float32x4.swizzle( be1, 3, 3, 3, 3 ), ae3 )
+				)
+			)
+		);
+
+		var oe2 = SIMD.Float32x4.add(
+			SIMD.Float32x4.mul( SIMD.Float32x4.swizzle( be2, 0, 0, 0, 0 ), ae0 ),
+			SIMD.Float32x4.add(
+				SIMD.Float32x4.mul( SIMD.Float32x4.swizzle( be2, 1, 1, 1, 1 ), ae1 ),
+				SIMD.Float32x4.add(
+					SIMD.Float32x4.mul( SIMD.Float32x4.swizzle( be2, 2, 2, 2, 2 ), ae2 ),
+					SIMD.Float32x4.mul( SIMD.Float32x4.swizzle( be2, 3, 3, 3, 3 ), ae3 )
+				)
+			)
+		);
+
+		var oe3 = SIMD.Float32x4.add(
+			SIMD.Float32x4.mul( SIMD.Float32x4.swizzle( be3, 0, 0, 0, 0 ), ae0 ),
+			SIMD.Float32x4.add(
+				SIMD.Float32x4.mul( SIMD.Float32x4.swizzle( be3, 1, 1, 1, 1 ), ae1 ),
+				SIMD.Float32x4.add(
+					SIMD.Float32x4.mul( SIMD.Float32x4.swizzle( be3, 2, 2, 2, 2 ), ae2 ),
+					SIMD.Float32x4.mul( SIMD.Float32x4.swizzle( be3, 3, 3, 3, 3 ), ae3 )
+				)
+			)
+		);
+
+		SIMD.Float32x4.store( te, 0, oe0 );
+		SIMD.Float32x4.store( te, 4, oe1 );
+		SIMD.Float32x4.store( te, 8, oe2 );
+		SIMD.Float32x4.store( te, 12, oe3 );
+
+		return this;
+
+	},
+
+	multiplyMatrices_Scalar: function ( a, b ) {
 
 		var ae = a.elements;
 		var be = b.elements;
@@ -953,3 +1022,5 @@ THREE.Matrix4.prototype = {
 	}
 
 };
+
+THREE.Matrix4.prototype.multiplyMatrices = THREE.UseSIMD ? THREE.Matrix4.prototype.multiplyMatrices_SIMD : THREE.Matrix4.prototype.multiplyMatrices_Scalar;
