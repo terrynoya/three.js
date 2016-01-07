@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>ThreeJS Benchmark Tests - SIMD</title>
+</head>
+<body>
+
+During this Benchmarking test the browser will be unresponsive.<br/><br/>
+
+Benchmark output is written to the JavaScript console.  To access the JavaScript console presss Ctrl-Shift-J.
+
+<script src="./src/Three.js"></script>
+<script src="./src/Matrix4.js"></script>
+
+<script>
+
+if ( 'undefined' === typeof SIMD ) {
+
+	throw 'run on browser which supports SIMD';
+
+}
+
+function run ( num ) {
+
+	var m1 = new THREE.Matrix4();
+	var m2 = new THREE.Matrix4();
+	var startTime, endTime;
+	var scalarResult, SIMDResult;
+
+	// warm up (just in case)
+	for ( var i = 0; i < num; i++ ) {
+
+		m1.multiplyMatrices_Scalar( m1, m2 );
+
+	}
+
+	startTime = performance.now();
+	for ( var i = 0; i < num; i++ ) {
+
+		m1.multiplyMatrices_Scalar( m1, m2 );
+
+	}
+	endTime = performance.now();
+	scalarResult = endTime - startTime;
+
+
+	// warm up (just in case)
+	for ( var i = 0; i < num; i++ ) {
+
+		m1.multiplyMatrices_SIMD( m1, m2 );
+
+	}
+
+	startTime = performance.now();
+	for ( var i = 0; i < num; i++ ) {
+
+		m1.multiplyMatrices_SIMD( m1, m2 );
+
+	}
+	endTime = performance.now();
+	SIMDResult = endTime - startTime;
+
+	console.log( 'Scalar: ' + scalarResult );
+	console.log( 'SIMD  : ' + SIMDResult );
+
+}
+
+for ( var i = 1; i <= 0x1000000; i = i << 4 ) {
+
+	console.log( '0x' + i.toString( 16 ) );
+	run( i );
+
+}
+
+</script>
+
+</body>
+</html>
