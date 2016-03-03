@@ -1,4 +1,4 @@
-There is no readme for WAVEFILE shor ver.
+There is no readme for WAVEFILE short ver.
 So I noted the author and original musics info here.
 
 Remember that he doesn't allow commercial use
