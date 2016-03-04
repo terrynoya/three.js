@@ -140,10 +140,11 @@ THREE.MMDLoader.prototype.loadAudio = function ( url, callback, onProgress, onEr
 	audio.load( url );
 
 	/*
-	 * Note: THREE.Audio doesn't support onReady callback r73
+	 * Note: THREE.Audio doesn't support onReady callback
 	 *       so doing polling instead.
+	 * TODO: discuss if THREE.Audio.load() should support callback.
 	 */
-	function polling () {
+	function polling ( buffer ) {
 
 		if ( audio.source.buffer === null ) {
 
@@ -220,13 +221,13 @@ THREE.MMDLoader.prototype.mergeVmds = function ( vmds ) {
 
 };
 
-THREE.MMDLoader.prototype.pourVmdIntoModel = function ( mesh, vmd ) {
+THREE.MMDLoader.prototype.pourVmdIntoModel = function ( mesh, vmd, name ) {
 
-	this.createAnimation( mesh, vmd );
+	this.createAnimation( mesh, vmd, name );
 
 };
 
-THREE.MMDLoader.prototype.pourVmdIntoCamera = function ( camera, vmd ) {
+THREE.MMDLoader.prototype.pourVmdIntoCamera = function ( camera, vmd, name ) {
 
 	var helper = new THREE.MMDLoader.DataCreationHelper();
 
@@ -254,11 +255,11 @@ THREE.MMDLoader.prototype.pourVmdIntoCamera = function ( camera, vmd ) {
 			var center = new THREE.Vector3( p[ 0 ], p[ 1 ], p[ 2 ] );
 			var up = new THREE.Vector3( 0, 1, 0 );
 
-			e.set( r[ 0 ], r[ 1 ], r[ 2 ] );
+			e.set( -r[ 0 ], -r[ 1 ], -r[ 2 ] );
 			q.setFromEuler( e );
 
-			position.applyQuaternion( q );
 			position.add( center );
+			position.applyQuaternion( q );
 
 			up.applyQuaternion( q );
 
@@ -281,10 +282,10 @@ THREE.MMDLoader.prototype.pourVmdIntoCamera = function ( camera, vmd ) {
 
 		var tracks = [];
 
-		tracks.push( new THREE.VectorKeyframeTrack( '.position', pkeys ) );
-		tracks.push( new THREE.VectorKeyframeTrack( '.center', ckeys ) );
-		tracks.push( new THREE.VectorKeyframeTrack( '.up', ukeys ) );
-		tracks.push( new THREE.NumberKeyframeTrack( '.fov', fkeys ) );
+		tracks.push( helper.generateTrackFromAnimationKeys( pkeys, 'VectorKeyframeTrackEx', '.position' ) );
+		tracks.push( helper.generateTrackFromAnimationKeys( ckeys, 'VectorKeyframeTrackEx', '.center' ) );
+		tracks.push( helper.generateTrackFromAnimationKeys( ukeys, 'VectorKeyframeTrackEx', '.up' ) );
+		tracks.push( helper.generateTrackFromAnimationKeys( fkeys, 'NumberKeyframeTrackEx', '.fov' ) );
 
 		camera.center = new THREE.Vector3( 0, 0, 0 );
 
@@ -294,9 +295,11 @@ THREE.MMDLoader.prototype.pourVmdIntoCamera = function ( camera, vmd ) {
 
 		}
 
-		camera.animations.push( new THREE.AnimationClip( 'cameraAnimation', -1, tracks ) );
+		camera.animations.push( new THREE.AnimationClip( name === undefined ? THREE.Math.generateUUID() : name, -1, tracks ) );
 
 	};
+
+	this.leftToRightVmd( vmd );
 
 	initAnimation();
 
@@ -320,7 +323,6 @@ THREE.MMDLoader.prototype.loadFile = function ( url, onLoad, onProgress, onError
 
 	var loader = new THREE.XHRLoader( this.manager );
 
-	loader.setCrossOrigin( this.crossOrigin );
 	loader.setResponseType( responseType );
 
 	var request = loader.load( url, function ( result ) {
@@ -1675,29 +1677,11 @@ THREE.MMDLoader.prototype.parseVpd = function ( text ) {
 
 	};
 
-	var leftToRight = function() {
-
-		if ( vpd.metadata.coordinateSystem === 'right' ) {
-
-			return;
-
-		}
-
-		vpd.metadata.coordinateSystem = 'right';
-
-		for ( var i = 0; i < vpd.bones.length; i++ ) {
-
-			helper.leftToRightVector3( vpd.bones[ i ].translation );
-			helper.leftToRightQuaternion( vpd.bones[ i ].quaternion );
-
-		}
-
-	};
-
 	checkMagic();
 	parseHeader();
 	parseBones();
-	leftToRight();
+
+	this.leftToRightVpd( vpd );
 
 	// console.log( vpd );  // for console debug
 
@@ -1709,82 +1693,8 @@ THREE.MMDLoader.prototype.createMesh = function ( model, texturePath, onProgress
 
 	var scope = this;
 	var geometry = new THREE.Geometry();
-        var material = new THREE.MeshFaceMaterial();
+        var material = new THREE.MultiMaterial();
 	var helper = new THREE.MMDLoader.DataCreationHelper();
-
-	var leftToRight = function() {
-
-		if ( model.metadata.coordinateSystem === 'right' ) {
-
-			return;
-
-		}
-
-		model.metadata.coordinateSystem = 'right';
-
-		for ( var i = 0; i < model.metadata.vertexCount; i++ ) {
-
-			helper.leftToRightVector3( model.vertices[ i ].position );
-			helper.leftToRightVector3( model.vertices[ i ].normal );
-
-		}
-
-		for ( var i = 0; i < model.metadata.faceCount; i++ ) {
-
-			helper.leftToRightIndexOrder( model.faces[ i ].indices );
-
-		}
-
-		for ( var i = 0; i < model.metadata.boneCount; i++ ) {
-
-			helper.leftToRightVector3( model.bones[ i ].position );
-
-		}
-
-		// TODO: support other morph for PMX
-		for ( var i = 0; i < model.metadata.morphCount; i++ ) {
-
-			var m = model.morphs[ i ];
-
-			if ( model.metadata.format === 'pmx' ) {
-
-				if ( m.type === 1 ) {
-
-					m = m.elements;
-
-				} else {
-
-					continue;
-
-				}
-
-			}
-
-			for ( var j = 0; j < m.elementCount; j++ ) {
-
-				helper.leftToRightVector3( m.elements[ j ].position );
-
-			}
-
-		}
-
-		for ( var i = 0; i < model.metadata.rigidBodyCount; i++ ) {
-
-			helper.leftToRightVector3( model.rigidBodies[ i ].position );
-			helper.leftToRightEuler( model.rigidBodies[ i ].rotation );
-
-		}
-
-		for ( var i = 0; i < model.metadata.constraintCount; i++ ) {
-
-			helper.leftToRightVector3( model.constraints[ i ].position );
-			helper.leftToRightEuler( model.constraints[ i ].rotation );
-			helper.leftToRightVector3Range( model.constraints[ i ].translationLimitation1, model.constraints[ i ].translationLimitation2 );
-			helper.leftToRightEulerRange( model.constraints[ i ].rotationLimitation1, model.constraints[ i ].rotationLimitation2 );
-
-		}
-
-	};
 
 	var initVartices = function () {
 
@@ -2088,22 +1998,27 @@ THREE.MMDLoader.prototype.createMesh = function ( model, texturePath, onProgress
 
 			}
 
-			var isSphericalReflectionMapping = params.sphericalReflectionMapping;
 			var texture = loader.load( fullPath, function ( t ) {
 
 				t.flipY = false;
 				t.wrapS = THREE.RepeatWrapping;
 				t.wrapT = THREE.RepeatWrapping;
 
-				if ( isSphericalReflectionMapping === true ) {
+				if ( params.sphericalReflectionMapping === true ) {
 
 					t.mapping = THREE.SphericalReflectionMapping;
 
 				}
 
+				for ( var i = 0; i < texture.readyCallbacks.length; i++ ) {
+
+					texture.readyCallbacks[ i ]( texture );
+
+				}
+
 			} );
 
-
+			texture.readyCallbacks = [];
 
 			var uuid = THREE.Math.generateUUID();
 
@@ -2113,7 +2028,7 @@ THREE.MMDLoader.prototype.createMesh = function ( model, texturePath, onProgress
 
 		};
 
-		for ( var i = 1; i < model.metadata.materialCount; i++ ) {
+		for ( var i = 0; i < model.metadata.materialCount; i++ ) {
 
 			geometry.faceVertexUvs.push( [] );
 
@@ -2128,6 +2043,9 @@ THREE.MMDLoader.prototype.createMesh = function ( model, texturePath, onProgress
 				type: 'MMDMaterial'
 
 			};
+
+			params.faceOffset = offset;
+			params.faceNum = m.faceCount;
 
 			for ( var j = 0; j < m.faceCount; j++ ) {
 
@@ -2154,16 +2072,17 @@ THREE.MMDLoader.prototype.createMesh = function ( model, texturePath, onProgress
 			params.specular = color.fromArray( [ m.specular[ 0 ], m.specular[ 1 ], m.specular[ 2 ] ] ).getHex();
 			params.shininess = m.shininess;
 
-			// always transparent so far.
-			//if ( params.opacity < 1 ) {
+			if ( params.opacity === 1.0 ) {
 
+				params.side = THREE.FrontSide;
+				params.transparent = false;
+
+			} else {
+
+				params.side = THREE.DoubleSide;
 				params.transparent = true;
 
-			//}
-
-			// temporal workaround
-			// TODO: implement correctly
-			//params.side = THREE.DoubleSide;
+			}
 
 			if ( model.metadata.format === 'pmd' ) {
 
@@ -2242,7 +2161,8 @@ THREE.MMDLoader.prototype.createMesh = function ( model, texturePath, onProgress
 
 			}
 
-			if ( params.map === undefined ) {
+			// TODO: check if this logic is right
+			if ( params.map === undefined /* && params.envMap === undefined */ ) {
 
 				params.emissive = color.fromArray( [ m.emissive[ 0 ], m.emissive[ 1 ], m.emissive[ 2 ] ] ).getHex();
 
@@ -2265,8 +2185,11 @@ THREE.MMDLoader.prototype.createMesh = function ( model, texturePath, onProgress
 			var p2 = model.materials[ i ];
 			var m = materialLoader.parse( p );
 
-			m.skinning = true;
-			m.morphTargets = true;
+			m.faceOffset = p.faceOffset;
+			m.faceNum = p.faceNum;
+
+			m.skinning = geometry.bones.length > 0 ? true : false;
+			m.morphTargets = geometry.morphTargets.length > 0 ? true : false;
 			m.lights = true;
 
 			m.blending = THREE.CustomBlending;
@@ -2275,9 +2198,136 @@ THREE.MMDLoader.prototype.createMesh = function ( model, texturePath, onProgress
 			m.blendSrcAlpha = THREE.SrcAlphaFactor;
 			m.blendDstAlpha = THREE.DstAlphaFactor;
 
-			if ( p.envMap !== undefined ) {
+			if ( m.map !== null ) {
+
+				// Check if this part of the texture image the material uses requires transparency
+				function checkTextureTransparency ( m ) {
+
+					m.map.readyCallbacks.push( function ( t ) {
+
+						// Is there any efficient ways?
+						function createImageData ( image ) {
+
+							var c = document.createElement( 'canvas' );
+							c.width = image.width;
+							c.height = image.height;
+
+							var ctx = c.getContext( '2d' );
+							ctx.drawImage( image, 0, 0 );
+
+							return ctx.getImageData( 0, 0, c.width, c.height );
+
+						};
+
+						function detectTextureTransparency ( image, uvs ) {
+
+							var width = image.width;
+							var height = image.height;
+							var data = image.data;
+							var threshold = 253;
+
+							if ( data.length / ( width * height ) !== 4 ) {
+
+								return false;
+
+							}
+
+							for ( var i = 0; i < uvs.length; i++ ) {
+
+								var centerUV = { x: 0.0, y: 0.0 };
+
+								for ( var j = 0; j < 3; j++ ) {
+
+									var uv = uvs[ i ][ j ];
+
+									if ( getAlphaByUv( image, uv ) < threshold ) {
+
+										return true;
+
+									}
+
+									centerUV.x += uv.x;
+									centerUV.y += uv.y;
+
+								}
+
+								centerUV.x /= 3;
+								centerUV.y /= 3;
+
+
+								if ( getAlphaByUv( image, centerUV ) < threshold ) {
+
+									return true;
+
+								}
+
+							}
+
+							return false;
+
+						};
+
+						/*
+						 * This method expects
+						 *   t.flipY = false
+						 *   t.wrapS = THREE.RepeatWrapping
+						 *   t.wrapT = THREE.RepeatWrapping
+						 * TODO: more precise
+						 */
+						function getAlphaByUv ( image, uv ) {
+
+							var width = image.width;
+							var height = image.height;
+
+							var x = Math.round( uv.x * width ) % width;
+							var y = Math.round( uv.y * height ) % height;
+
+							if ( x < 0 ) {
+
+								x += width;
+
+							}
+
+							if ( y < 0 ) {
+
+								y += height;
+
+							}
+
+							var index = y * width + x;
+
+							return image.data[ index * 4 + 3 ];
+
+						};
+
+						var imageData = t.image.data !== undefined ? t.image : createImageData( t.image );
+						var uvs = geometry.faceVertexUvs[ 0 ].slice( m.faceOffset, m.faceOffset + m.faceNum );
+
+						m.textureTransparency = detectTextureTransparency( imageData, uvs );
+
+					} );
+
+				}
+
+				checkTextureTransparency( m );
+
+			}
+
+			if ( m.envMap !== null ) {
+
+				// TODO: WebGLRenderer should automatically update?
+				function updateMaterialWhenTextureIsReady ( m ) {
+
+					m.envMap.readyCallbacks.push( function ( t ) {
+
+						m.needsUpdate = true;
+
+					} );
+
+				}
 
 				m.combine = p.envMapType;
+				updateMaterialWhenTextureIsReady( m );
 
 			}
 
@@ -2315,11 +2365,17 @@ THREE.MMDLoader.prototype.createMesh = function ( model, texturePath, onProgress
 				m.uniforms.toonMap.value = textures[ p2.toonIndex ];
 				m.uniforms.celShading.value = 1;
 
-				// temporal workaround
-				// TODO: handle correctly
-				var n = model.toonTextures[ p2.toonIndex === -1 ? 0 : p2.toonIndex ].fileName;
-				var uuid = loadTexture( n, { defaultTexturePath: isDefaultToonTexture( n ) } );
-				m.uniforms.toonMap.value = textures[ uuid ];
+				if ( p2.toonIndex === -1 ) {
+
+					m.uniforms.hasToonTexture.value = 0;
+
+				} else {
+
+					var n = model.toonTextures[ p2.toonIndex ].fileName;
+					var uuid = loadTexture( n, { defaultTexturePath: isDefaultToonTexture( n ) } );
+					m.uniforms.toonMap.value = textures[ uuid ];
+					m.uniforms.hasToonTexture.value = 1;
+				}
 
 			} else {
 
@@ -2328,29 +2384,92 @@ THREE.MMDLoader.prototype.createMesh = function ( model, texturePath, onProgress
 				m.uniforms.outlineAlpha.value = p2.edgeColor[ 3 ];
 				m.uniforms.celShading.value = 1;
 
-				// temporal workaround
-				// TODO: handle correctly
-				var index = p2.toonIndex === -1 ? -1 : p2.toonIndex;
-				var flag = p2.toonIndex === -1 ? 1 : p2.toonFlag;
+				if ( p2.toonIndex === -1 ) {
 
-				if ( flag === 0 ) {
-
-					var n = model.textures[ index ];
-					var uuid = loadTexture( n );
-					m.uniforms.toonMap.value = textures[ uuid ];
+					m.uniforms.hasToonTexture.value = 0;
 
 				} else {
 
-					var num = index + 1;
-					var fileName = 'toon' + ( num < 10 ? '0' + num : num ) + '.bmp';
-					var uuid = loadTexture( fileName, { defaultTexturePath: true } );
-					m.uniforms.toonMap.value = textures[ uuid ];
+					if ( p2.toonFlag === 0 ) {
+
+						var n = model.textures[ p2.toonIndex ];
+						var uuid = loadTexture( n );
+						m.uniforms.toonMap.value = textures[ uuid ];
+
+					} else {
+
+						var num = p2.toonIndex + 1;
+						var fileName = 'toon' + ( num < 10 ? '0' + num : num ) + '.bmp';
+						var uuid = loadTexture( fileName, { defaultTexturePath: true } );
+						m.uniforms.toonMap.value = textures[ uuid ];
+
+					}
+
+					m.uniforms.hasToonTexture.value = 1;
 
 				}
 
 			}
 
 			material.materials.push( m );
+
+		}
+
+		if ( model.metadata.format === 'pmx' ) {
+
+			function checkAlphaMorph ( morph, elements ) {
+
+				if ( morph.type !== 8 ) {
+
+					return;
+
+				}
+
+				for ( var i = 0; i < elements.length; i++ ) {
+
+					var e = elements[ i ];
+
+					if ( e.index === -1 ) {
+
+						continue;
+
+					}
+
+					var m = material.materials[ e.index ];
+
+					if ( m.opacity !== e.diffuse[ 3 ] ) {
+
+						m.morphTransparency = true;
+
+					}
+
+				}
+
+			}
+
+			for ( var i = 0; i < model.morphs.length; i++ ) {
+
+				var morph = model.morphs[ i ];
+				var elements = morph.elements;
+
+				if ( morph.type === 0 ) {
+
+					for ( var j = 0; j < elements.length; j++ ) {
+
+						var morph2 = model.morphs[ elements[ j ].index ];
+						var elements2 = morph2.elements;
+
+						checkAlphaMorph( morph2, elements2 );
+
+					}
+
+				} else {
+
+					checkAlphaMorph( morph, elements );
+
+				}
+
+			}
 
 		}
 
@@ -2415,7 +2534,7 @@ THREE.MMDLoader.prototype.createMesh = function ( model, texturePath, onProgress
 			var bodyB = rigidBodies[ p.rigidBodyIndex2 ];
 
 			/*
-			 * Refer http://www20.atpages.jp/katwat/wp/?p=4135 
+			 * Refer http://www20.atpages.jp/katwat/wp/?p=4135
 			 * for what this is for
 			 */
 			if ( bodyA.type !== 0 && bodyB.type === 2 ) {
@@ -2453,7 +2572,8 @@ THREE.MMDLoader.prototype.createMesh = function ( model, texturePath, onProgress
 
 	};
 
-	leftToRight();
+	this.leftToRightModel( model );
+
 	initVartices();
 	initFaces();
 	initBones();
@@ -2478,40 +2598,26 @@ THREE.MMDLoader.prototype.createMesh = function ( model, texturePath, onProgress
 
 };
 
-THREE.MMDLoader.prototype.createAnimation = function ( mesh, vmd ) {
+THREE.MMDLoader.prototype.createAnimation = function ( mesh, vmd, name ) {
 
 	var scope = this;
 
 	var helper = new THREE.MMDLoader.DataCreationHelper();
 
-	var leftToRight = function() {
+	var initMotionAnimations = function () {
 
-		if ( vmd.metadata.coordinateSystem === 'right' ) {
+		if ( vmd.metadata.motionCount === 0 ) {
 
 			return;
 
 		}
 
-		vmd.metadata.coordinateSystem = 'right';
-
-		for ( var i = 0; i < vmd.metadata.motionCount; i++ ) {
-
-			helper.leftToRightVector3( vmd.motions[ i ].position );
-			helper.leftToRightQuaternion( vmd.motions[ i ].rotation );
-
-		}
-
-	};
-
-	var initMotionAnimations = function () {
-
 		var bones = mesh.geometry.bones;
 		var orderedMotions = helper.createOrderedMotionArrays( bones, vmd.motions, 'boneName' );
 
 		var animation = {
-			name: 'Action',
+			name: name === undefined ? THREE.Math.generateUUID() : name,
 			fps: 30,
-			length: 0.0,
 			hierarchy: []
 		};
 
@@ -2525,8 +2631,6 @@ THREE.MMDLoader.prototype.createAnimation = function ( mesh, vmd ) {
 			);
 
 		}
-
-		var maxTime = 0.0;
 
 		for ( var i = 0; i < orderedMotions.length; i++ ) {
 
@@ -2542,19 +2646,9 @@ THREE.MMDLoader.prototype.createAnimation = function ( mesh, vmd ) {
 
 				helper.pushBoneAnimationKey( keys, t, bone, p, r );
 
-				if ( t > maxTime ) {
-
-					maxTime = t;
-
-				}
-
 			}
 
 		}
-
-		// add 2 secs as afterglow
-		maxTime += 2.0;
-		animation.length = maxTime;
 
 		for ( var i = 0; i < orderedMotions.length; i++ ) {
 
@@ -2565,25 +2659,34 @@ THREE.MMDLoader.prototype.createAnimation = function ( mesh, vmd ) {
 
 		}
 
-//		mesh.geometry.animation = animation;
-
 		if ( mesh.geometry.animations === undefined ) {
 
 			mesh.geometry.animations = [];
 
 		}
 
-		mesh.geometry.animations.push( THREE.AnimationClip.parseAnimation( animation, mesh.geometry.bones ) );
+		var clip = THREE.AnimationClip.parseAnimation( animation, mesh.geometry.bones );
+
+		if ( clip !== null ) {
+
+			mesh.geometry.animations.push( clip );
+
+		}
 
 	};
 
 	var initMorphAnimations = function () {
 
+		if ( vmd.metadata.morphCount === 0 ) {
+
+			return;
+
+		}
+
 		var orderedMorphs = helper.createOrderedMotionArrays( mesh.geometry.morphTargets, vmd.morphs, 'morphName' );
 
 		var morphAnimation = {
 			fps: 30,
-			length: 0.0,
 			hierarchy: []
 		};
 
@@ -2592,8 +2695,6 @@ THREE.MMDLoader.prototype.createAnimation = function ( mesh, vmd ) {
 			morphAnimation.hierarchy.push( { keys: [] } );
 
 		}
-
-		var maxTime = 0.0;
 
 		for ( var i = 0; i < orderedMorphs.length; i++ ) {
 
@@ -2607,52 +2708,170 @@ THREE.MMDLoader.prototype.createAnimation = function ( mesh, vmd ) {
 
 				helper.pushAnimationKey( keys, t, w );
 
-				if ( t > maxTime ) {
-
-					maxTime = t;
-
-				}
-
 			}
 
 		}
-
-		// add 2 secs as afterglow
-		maxTime += 2.0;
-		morphAnimation.length = maxTime;
-
-		for ( var i = 0; i < orderedMorphs.length; i++ ) {
-
-			var keys = morphAnimation.hierarchy[ i ].keys;
-			helper.insertAnimationKeyAtTimeZero( keys, 0.0 );
-			helper.insertStartAnimationKey( keys );
-
-		}
-
-//		geometry.morphAnimation = morphAnimation;
 
 		var tracks = [];
 
 		for ( var i = 0; i < orderedMorphs.length; i++ ) {
 
-			var h = morphAnimation.hierarchy[ i ];
-			tracks.push( new THREE.NumberKeyframeTrack( '.morphTargetInfluences[' + i + ']', h.keys ) );
+			var keys = morphAnimation.hierarchy[ i ].keys;
+
+			if ( keys.length === 0 ) {
+
+				continue;
+
+			}
+
+			tracks.push( helper.generateTrackFromAnimationKeys( keys, 'NumberKeyframeTrackEx', '.morphTargetInfluences[' + i + ']' ) );
 
 		}
 
-		if ( mesh.geometry.morphAnimations === undefined ) {
+		var clip = new THREE.AnimationClip( name === undefined ? THREE.Math.generateUUID() : name + 'Morph', -1, tracks );
 
-			mesh.geometry.morphAnimations = [];
+		if ( clip !== null ) {
+
+			if ( mesh.geometry.morphAnimations === undefined ) {
+
+				mesh.geometry.morphAnimations = [];
+
+			}
+
+			mesh.geometry.morphAnimations.push( clip );
 
 		}
-
-		mesh.geometry.morphAnimations.push( new THREE.AnimationClip( 'morphAnimation', -1, tracks ) );
 
 	};
 
-	leftToRight();
+	this.leftToRightVmd( vmd );
+
 	initMotionAnimations();
 	initMorphAnimations();
+
+};
+
+THREE.MMDLoader.prototype.leftToRightModel = function ( model ) {
+
+	if ( model.metadata.coordinateSystem === 'right' ) {
+
+		return;
+
+	}
+
+	model.metadata.coordinateSystem = 'right';
+
+	var helper = new THREE.MMDLoader.DataCreationHelper();
+
+	for ( var i = 0; i < model.metadata.vertexCount; i++ ) {
+
+		helper.leftToRightVector3( model.vertices[ i ].position );
+		helper.leftToRightVector3( model.vertices[ i ].normal );
+
+	}
+
+	for ( var i = 0; i < model.metadata.faceCount; i++ ) {
+
+		helper.leftToRightIndexOrder( model.faces[ i ].indices );
+
+	}
+
+	for ( var i = 0; i < model.metadata.boneCount; i++ ) {
+
+		helper.leftToRightVector3( model.bones[ i ].position );
+
+	}
+
+	// TODO: support other morph for PMX
+	for ( var i = 0; i < model.metadata.morphCount; i++ ) {
+
+		var m = model.morphs[ i ];
+
+		if ( model.metadata.format === 'pmx' ) {
+
+			if ( m.type === 1 ) {
+
+				m = m.elements;
+
+			} else {
+
+				continue;
+
+			}
+
+		}
+
+		for ( var j = 0; j < m.elementCount; j++ ) {
+
+			helper.leftToRightVector3( m.elements[ j ].position );
+
+		}
+
+	}
+
+	for ( var i = 0; i < model.metadata.rigidBodyCount; i++ ) {
+
+		helper.leftToRightVector3( model.rigidBodies[ i ].position );
+		helper.leftToRightEuler( model.rigidBodies[ i ].rotation );
+
+	}
+
+	for ( var i = 0; i < model.metadata.constraintCount; i++ ) {
+
+		helper.leftToRightVector3( model.constraints[ i ].position );
+		helper.leftToRightEuler( model.constraints[ i ].rotation );
+		helper.leftToRightVector3Range( model.constraints[ i ].translationLimitation1, model.constraints[ i ].translationLimitation2 );
+		helper.leftToRightEulerRange( model.constraints[ i ].rotationLimitation1, model.constraints[ i ].rotationLimitation2 );
+
+	}
+
+};
+
+THREE.MMDLoader.prototype.leftToRightVmd = function ( vmd ) {
+
+	if ( vmd.metadata.coordinateSystem === 'right' ) {
+
+		return;
+
+	}
+
+	vmd.metadata.coordinateSystem = 'right';
+
+	var helper = new THREE.MMDLoader.DataCreationHelper();
+
+	for ( var i = 0; i < vmd.metadata.motionCount; i++ ) {
+
+		helper.leftToRightVector3( vmd.motions[ i ].position );
+		helper.leftToRightQuaternion( vmd.motions[ i ].rotation );
+
+	}
+
+	for ( var i = 0; i < vmd.metadata.cameraCount; i++ ) {
+
+		helper.leftToRightEuler( vmd.cameras[ i ].rotation );
+
+	}
+
+};
+
+THREE.MMDLoader.prototype.leftToRightVpd = function ( vpd ) {
+
+	if ( vpd.metadata.coordinateSystem === 'right' ) {
+
+		return;
+
+	}
+
+	vpd.metadata.coordinateSystem = 'right';
+
+	var helper = new THREE.MMDLoader.DataCreationHelper();
+
+	for ( var i = 0; i < vpd.bones.length; i++ ) {
+
+		helper.leftToRightVector3( vpd.bones[ i ].translation );
+		helper.leftToRightQuaternion( vpd.bones[ i ].quaternion );
+
+	}
 
 };
 
@@ -2819,24 +3038,24 @@ THREE.MMDLoader.DataCreationHelper.prototype = {
 
 	},
 
-	createOrderedMotionArrays: function ( array, array2, key ) {
+	createOrderedMotionArrays: function ( targetArray, motionArray, key ) {
 
-		var dict = this.createDictionary( array );
-		var result = this.initializeMotionArrays( array );
-		this.createMotionArrays( array2, result, dict, key );
+		var dict = this.createDictionary( targetArray );
+		var result = this.initializeMotionArrays( targetArray );
+		this.createMotionArrays( motionArray, result, dict, key );
 		this.sortMotionArrays( result );
 
 		return result;
 
 	},
 
-	pushAnimationKey: function ( keys, time, value, preventLerp ) {
+	pushAnimationKey: function ( keys, time, value, preventInterpolation ) {
 
 		/*
 		 * Note: This is a workaround not to make Animation system calculate lerp
 		 *       if the diff from the last frame is 1 frame (in 30fps).
 		 */
-		if ( keys.length > 0 && preventLerp === true ) {
+		if ( keys.length > 0 && preventInterpolation === true ) {
 
 			var k = keys[ keys.length - 1 ];
 
@@ -2848,7 +3067,6 @@ THREE.MMDLoader.DataCreationHelper.prototype = {
 						value: k.value.clone === undefined ? k.value : k.value.clone()
 					}
 				);
-
 
 			}
 
@@ -2933,17 +3151,76 @@ THREE.MMDLoader.DataCreationHelper.prototype = {
 
 		if ( k.time !== 0.0 ) {
 
-			keys.unshift( { time: 0.0,
-			                 pos: [ k.pos[ 0 ], k.pos[ 1 ], k.pos[ 2 ] ],
-			                 rot: [ k.rot[ 0 ], k.rot[ 1 ], k.rot[ 2 ], k.rot[ 3 ] ],
-			                 scl: [ k.scl[ 0 ], k.scl[ 1 ], k.scl[ 2 ] ]
-			              } );
+			keys.unshift(
+				{
+					time: 0.0,
+					pos: [ k.pos[ 0 ], k.pos[ 1 ], k.pos[ 2 ] ],
+					rot: [ k.rot[ 0 ], k.rot[ 1 ], k.rot[ 2 ], k.rot[ 3 ] ],
+					scl: [ k.scl[ 0 ], k.scl[ 1 ], k.scl[ 2 ] ]
+				}
+			);
 
 		}
+
+	},
+
+	/*
+	 * This method wraps r74 Animation key frame track API for r73 Animation.
+	 */
+	generateTrackFromAnimationKeys: function ( keys, trackKey, name ) {
+
+		var times = [];
+		var values = [];
+
+		for ( var i = 0; i < keys.length; i++ ) {
+
+			var key = keys[ i ];
+
+			times.push( key.time );
+
+			if ( trackKey === 'VectorKeyframeTrackEx' ) {
+
+				values.push( key.value.x );
+				values.push( key.value.y );
+				values.push( key.value.z );
+
+			} else {
+
+				values.push( key.value );
+
+			}
+
+		}
+
+		return new THREE.MMDLoader[ trackKey ]( name, times, values );
 
 	}
 
 };
+
+/*
+ * These two classes are for high precision of times and values.
+ * TODO: Let Three.KeyframeTrack support type select on instance creation.
+ */
+THREE.MMDLoader.VectorKeyframeTrackEx = function ( name, times, values, interpolation ) {
+
+	THREE.VectorKeyframeTrack.call( this, name, times, values, interpolation );
+
+};
+
+THREE.MMDLoader.VectorKeyframeTrackEx.prototype = Object.create( THREE.VectorKeyframeTrack.prototype );
+THREE.MMDLoader.VectorKeyframeTrackEx.prototype.constructor = THREE.MMDLoader.VectorKeyframeTrackEx;
+THREE.MMDLoader.VectorKeyframeTrackEx.prototype.TimeBufferType = Float64Array;
+
+THREE.MMDLoader.NumberKeyframeTrackEx = function ( name, times, values, interpolation ) {
+
+	THREE.VectorKeyframeTrack.call( this, name, times, values, interpolation );
+
+};
+
+THREE.MMDLoader.NumberKeyframeTrackEx.prototype = Object.create( THREE.NumberKeyframeTrack.prototype );
+THREE.MMDLoader.NumberKeyframeTrackEx.prototype.constructor = THREE.MMDLoader.NumberKeyframeTrackEx;
+THREE.MMDLoader.NumberKeyframeTrackEx.prototype.TimeBufferType = Float64Array;
 
 THREE.MMDLoader.DataView = function ( buffer, littleEndian ) {
 
@@ -3269,23 +3546,26 @@ THREE.MMDLoader.DataView.prototype = {
 };
 
 /*
- * Custom shaders based on MeshPhongMaterial.
- * This class extends ShaderMaterial while shader is based on MeshPhongMaterial.
+ * MMD custom shaders based on MeshPhongMaterial.
+ * This class extends ShaderMaterial while shaders are based on MeshPhongMaterial.
  * Keep this class updated on MeshPhongMaterial.
  */
-THREE.MMDMaterial = function ( params ) {
+THREE.MMDMaterial = function ( parameters ) {
 
-	THREE.ShaderMaterial.call( this, params );
+	THREE.ShaderMaterial.call( this, parameters );
 
 //	this.type = 'MMDMaterial';
+
+	this.faceOffset = null;
+	this.faceNum = null;
+	this.textureTransparency = false;
+	this.morphTransparency = false;
 
 	// the followings are copied from MeshPhongMaterial
 	this.color = new THREE.Color( 0xffffff ); // diffuse
 	this.emissive = new THREE.Color( 0x000000 );
 	this.specular = new THREE.Color( 0x111111 );
 	this.shininess = 30;
-
-	this.metal = false;
 
 	this.map = null;
 
@@ -3331,13 +3611,17 @@ THREE.MMDMaterial = function ( params ) {
 	this.morphTargets = false;
 	this.morphNormals = false;
 
-	this.setValues( params );
+	this.setValues( parameters );
 
 };
 
 THREE.MMDMaterial.prototype = Object.create( THREE.ShaderMaterial.prototype );
 THREE.MMDMaterial.prototype.constructor = THREE.MMDMaterial;
 
+/*
+ * Shaders are copied from MeshPhongMaterial and then MMD spcific codes are inserted.
+ * Keep shaders updated on MeshPhongMaterial.
+ */
 THREE.ShaderLib[ 'mmd' ] = {
 
 	uniforms: THREE.UniformsUtils.merge( [
@@ -3350,8 +3634,8 @@ THREE.ShaderLib[ 'mmd' ] = {
 		THREE.UniformsLib[ "normalmap" ],
 		THREE.UniformsLib[ "displacementmap" ],
 		THREE.UniformsLib[ "fog" ],
+		THREE.UniformsLib[ "ambient" ],
 		THREE.UniformsLib[ "lights" ],
-		THREE.UniformsLib[ "shadowmap" ],
 
 		{
 			"emissive" : { type: "c", value: new THREE.Color( 0x000000 ) },
@@ -3359,15 +3643,17 @@ THREE.ShaderLib[ 'mmd' ] = {
 			"shininess": { type: "f", value: 30 }
 		},
 
-		// MMD specific
+		// ---- MMD specific for cel shading(outline drawing and toon mapping)
 		{
 			"outlineDrawing"  : { type: "i", value: 0 },
 			"outlineThickness": { type: "f", value: 0.0 },
 			"outlineColor"    : { type: "c", value: new THREE.Color( 0x000000 ) },
 			"outlineAlpha"    : { type: "f", value: 1.0 },
 			"celShading"      : { type: "i", value: 0 },
-			"toonMap"         : { type: "t", value: null }
+			"toonMap"         : { type: "t", value: null },
+			"hasToonTexture"  : { type: "i", value: 0 }
 		}
+		// ---- MMD specific for cel shading(outline drawing and toon mapping)
 
 	] ),
 
@@ -3395,9 +3681,10 @@ THREE.ShaderLib[ 'mmd' ] = {
 		THREE.ShaderChunk[ "shadowmap_pars_vertex" ],
 		THREE.ShaderChunk[ "logdepthbuf_pars_vertex" ],
 
-		// MMD specific
+		// ---- MMD specific for outline drawing
 		"	uniform bool outlineDrawing;",
 		"	uniform float outlineThickness;",
+		// ---- MMD specific for outline drawing
 
 		"void main() {",
 
@@ -3431,7 +3718,7 @@ THREE.ShaderLib[ 'mmd' ] = {
 			THREE.ShaderChunk[ "lights_phong_vertex" ],
 			THREE.ShaderChunk[ "shadowmap_vertex" ],
 
-		// MMD specific: outline drawing
+		// ---- MMD specific for outline drawing
 		"	if ( outlineDrawing ) {",
 		"		float thickness = outlineThickness;",
 		"		float ratio = 1.0;", // TODO: support outline size ratio for each vertex
@@ -3440,6 +3727,7 @@ THREE.ShaderLib[ 'mmd' ] = {
 		"		vec4 enorm = normalize( epos2 - epos );",
 		"		gl_Position = epos + enorm * thickness * epos.w * ratio;",
 		"	}",
+		// ---- MMD specific for outline drawing
 
 		"}"
 
@@ -3466,6 +3754,9 @@ THREE.ShaderLib[ 'mmd' ] = {
 		THREE.ShaderChunk[ "emissivemap_pars_fragment" ],
 		THREE.ShaderChunk[ "envmap_pars_fragment" ],
 		THREE.ShaderChunk[ "fog_pars_fragment" ],
+		THREE.ShaderChunk[ "bsdfs" ],
+		THREE.ShaderChunk[ "ambient_pars" ],
+		THREE.ShaderChunk[ "lights_pars" ],
 		THREE.ShaderChunk[ "lights_phong_pars_fragment" ],
 		THREE.ShaderChunk[ "shadowmap_pars_fragment" ],
 		THREE.ShaderChunk[ "bumpmap_pars_fragment" ],
@@ -3473,32 +3764,53 @@ THREE.ShaderLib[ 'mmd' ] = {
 		THREE.ShaderChunk[ "specularmap_pars_fragment" ],
 		THREE.ShaderChunk[ "logdepthbuf_pars_fragment" ],
 
-		// MMD specific
+		// ---- MMD specific for cel shading
 		"	uniform bool outlineDrawing;",
 		"	uniform vec3 outlineColor;",
 		"	uniform float outlineAlpha;",
 		"	uniform bool celShading;",
 		"	uniform sampler2D toonMap;",
+		"	uniform bool hasToonTexture;",
 
-		// MMD specific: toon shadering
 		"	vec3 toon ( vec3 lightDirection, vec3 norm ) {",
+		"		if ( ! hasToonTexture ) {",
+		"			return vec3( 1.0 );",
+		"		}",
 		"		vec2 coord = vec2( 0.0, 0.5 * ( 1.0 - dot( lightDirection, norm ) ) );",
 		"		return texture2D( toonMap, coord ).rgb;",
 		"	}",
 
+		// redefine for MMD
+		"#undef RE_Direct",
+		"void RE_Direct_BlinnMMD( const in IncidentLight directLight, const in GeometricContext geometry, const in BlinnPhongMaterial material, inout ReflectedLight reflectedLight ) {",
+		"	float dotNL = saturate( dot( geometry.normal, directLight.direction ) );",
+		"	vec3 irradiance = dotNL * PI * directLight.color; // punctual light",
+
+		// ---- MMD specific for toon mapping
+		"	if ( celShading ) {",
+		"		reflectedLight.directDiffuse += material.diffuseColor * directLight.color * toon( directLight.direction, geometry.normal );",
+		"	} else {",
+		"		reflectedLight.directDiffuse += irradiance * BRDF_Diffuse_Lambert( material.diffuseColor );",
+		"	}",
+		// ---- MMD specific for toon mapping
+
+		"	reflectedLight.directSpecular += irradiance * BRDF_Specular_BlinnPhong( directLight, geometry, material.specularColor, material.specularShininess ) * material.specularStrength;",
+		"}",
+		"#define RE_Direct	RE_Direct_BlinnMMD",
+		// ---- MMD specific for toon mapping
+
 		"void main() {",
 
-		// MMD specific: outline drawing
+		// ---- MMD specific for outline drawing
 		"	if ( outlineDrawing ) {",
 		"		gl_FragColor = vec4( outlineColor, outlineAlpha );",
 		"		return;",
 		"	}",
+		// ---- MMD specific for outline drawing
 
-		"	vec3 outgoingLight = vec3( 0.0 );",
 		"	vec4 diffuseColor = vec4( diffuse, opacity );",
-		"	vec3 totalAmbientLight = ambientLightColor;",
+		"	ReflectedLight reflectedLight = ReflectedLight( vec3( 0.0 ), vec3( 0.0 ), vec3( 0.0 ), vec3( 0.0 ) );",
 		"	vec3 totalEmissiveLight = emissive;",
-		"	vec3 shadowMask = vec3( 1.0 );",
 
 			THREE.ShaderChunk[ "logdepthbuf_fragment" ],
 			THREE.ShaderChunk[ "map_fragment" ],
@@ -3506,109 +3818,19 @@ THREE.ShaderLib[ 'mmd' ] = {
 			THREE.ShaderChunk[ "alphamap_fragment" ],
 			THREE.ShaderChunk[ "alphatest_fragment" ],
 			THREE.ShaderChunk[ "specularmap_fragment" ],
-			THREE.ShaderChunk[ "normal_phong_fragment" ],
-			THREE.ShaderChunk[ "lightmap_fragment" ],
-			THREE.ShaderChunk[ "hemilight_fragment" ],
-			THREE.ShaderChunk[ "aomap_fragment" ],
+			THREE.ShaderChunk[ "normal_fragment" ],
 			THREE.ShaderChunk[ "emissivemap_fragment" ],
 
-			//THREE.ShaderChunk[ "lights_phong_fragment" ],
+			// accumulation
+			THREE.ShaderChunk[ "lights_phong_fragment" ],
+			THREE.ShaderChunk[ "lights_template" ],
 
-		// MMD specific: toon shadering
-		"	vec3 viewDir = normalize( vViewPosition );",
-		"	vec3 totalDiffuseLight = vec3( 0.0 );",
-		"	vec3 totalSpecularLight = vec3( 0.0 );",
+			// modulation
+			THREE.ShaderChunk[ "aomap_fragment" ],
 
-		"#if MAX_POINT_LIGHTS > 0",
-		"	for ( int i = 0; i < MAX_POINT_LIGHTS; i ++ ) {",
-		"		vec3 lightColor = pointLightColor[ i ];",
-		"		vec3 lightPosition = pointLightPosition[ i ];",
-		"		vec3 lVector = lightPosition + vViewPosition.xyz;",
-		"		vec3 lightDir = normalize( lVector );",
-		"		// attenuation",
-		"		float attenuation = calcLightAttenuation( length( lVector ), pointLightDistance[ i ], pointLightDecay[ i ] );",
-		"		// diffuse",
-		"		float cosineTerm = saturate( dot( normal, lightDir ) );",
-
-		// MMD specific
-		"		if ( celShading ) {",
-		"			totalDiffuseLight += lightColor * toon( lightDir, normal );",
-		"		} else {",
-		"			totalDiffuseLight += lightColor * attenuation * cosineTerm;",
-		"		}",
-
-		"		// specular",
-		"		vec3 brdf = BRDF_BlinnPhong( specular, shininess, normal, lightDir, viewDir );",
-		"		totalSpecularLight += brdf * specularStrength * lightColor * attenuation * cosineTerm;",
-		"	}",
-		"#endif",
-
-		"#if MAX_SPOT_LIGHTS > 0",
-		"	for ( int i = 0; i < MAX_SPOT_LIGHTS; i ++ ) {",
-		"		vec3 lightColor = spotLightColor[ i ];",
-		"		vec3 lightPosition = spotLightPosition[ i ];",
-		"		vec3 lVector = lightPosition + vViewPosition.xyz;",
-		"		vec3 lightDir = normalize( lVector );",
-		"		float spotEffect = dot( spotLightDirection[ i ], lightDir );",
-		"		if ( spotEffect > spotLightAngleCos[ i ] ) {",
-		"			spotEffect = saturate( pow( saturate( spotEffect ), spotLightExponent[ i ] ) );",
-		"			// attenuation",
-		"			float attenuation = calcLightAttenuation( length( lVector ), spotLightDistance[ i ], spotLightDecay[ i ] );",
-		"			attenuation *= spotEffect;",
-		"			// diffuse",
-		"			float cosineTerm = saturate( dot( normal, lightDir ) );",
-
-		// MMD specific
-		"			if ( celShading ) {",
-		"				totalDiffuseLight += lightColor * toon( lightDir, normal );",
-		"			} else {",
-		"				totalDiffuseLight += lightColor * attenuation * cosineTerm;",
-		"			}",
-
-		"			// specular",
-		"			vec3 brdf = BRDF_BlinnPhong( specular, shininess, normal, lightDir, viewDir );",
-		"			totalSpecularLight += brdf * specularStrength * lightColor * attenuation * cosineTerm;",
-		"		}",
-		"	}",
-		"#endif",
-
-		"#if MAX_DIR_LIGHTS > 0",
-		"	for ( int i = 0; i < MAX_DIR_LIGHTS; i ++ ) {",
-		"		vec3 lightColor = directionalLightColor[ i ];",
-		"		vec3 lightDir = directionalLightDirection[ i ];",
-		"		// diffuse",
-		"		float cosineTerm = saturate( dot( normal, lightDir ) );",
-
-		// MMD specific
-		"		if ( celShading ) {",
-		"			totalDiffuseLight += lightColor * toon( lightDir, normal );",
-		"		} else {",
-		"			totalDiffuseLight += lightColor * cosineTerm;",
-		"		}",
-
-		"		// specular",
-		"		vec3 brdf = BRDF_BlinnPhong( specular, shininess, normal, lightDir, viewDir );",
-		"		totalSpecularLight += brdf * specularStrength * lightColor * cosineTerm;",
-		"	}",
-		"#endif",
-
-			THREE.ShaderChunk[ "shadowmap_fragment" ],
-
-			"totalDiffuseLight *= shadowMask;",
-			"totalSpecularLight *= shadowMask;",
-
-			"#ifdef METAL",
-
-			"	outgoingLight += diffuseColor.rgb * ( totalDiffuseLight + totalAmbientLight ) * specular + totalSpecularLight + totalEmissiveLight;",
-
-			"#else",
-
-			"	outgoingLight += diffuseColor.rgb * ( totalDiffuseLight + totalAmbientLight ) + totalSpecularLight + totalEmissiveLight;",
-
-			"#endif",
+			"vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + reflectedLight.directSpecular + reflectedLight.indirectSpecular + totalEmissiveLight;",
 
 			THREE.ShaderChunk[ "envmap_fragment" ],
-
 			THREE.ShaderChunk[ "linear_to_gamma_fragment" ],
 
 			THREE.ShaderChunk[ "fog_fragment" ],
@@ -3750,6 +3972,9 @@ THREE.MMDHelper.prototype = {
 		mesh.physics = null;
 		this.meshes.push( mesh );
 
+		// workaround until I make IK and Physics Animation plugin
+		this.initBackupBones( mesh );
+
 	},
 
 	setAudio: function ( audio, listener, params ) {
@@ -3760,6 +3985,7 @@ THREE.MMDHelper.prototype = {
 
 	setCamera: function ( camera ) {
 
+		camera.mixer = null;
 		this.camera = camera;
 
 	},
@@ -3793,8 +4019,7 @@ THREE.MMDHelper.prototype = {
 
 	setAnimation: function ( mesh ) {
 
-		if ( mesh.geometry.animations !== undefined ||
-		     mesh.geometry.morphAnimations !== undefined ) {
+		if ( mesh.geometry.animations !== undefined || mesh.geometry.morphAnimations !== undefined ) {
 
 			mesh.mixer = new THREE.AnimationMixer( mesh );
 
@@ -3802,13 +4027,33 @@ THREE.MMDHelper.prototype = {
 
 		if ( mesh.geometry.animations !== undefined ) {
 
-			mesh.mixer.addAction( new THREE.AnimationAction( mesh.geometry.animations[ 0 ] ) );
+			for ( var i = 0; i < mesh.geometry.animations.length; i++ ) {
+
+				var action = mesh.mixer.clipAction( mesh.geometry.animations[ i ] );
+
+				if ( i === 0 ) {
+
+					action.play();
+
+				}
+
+			}
 
 		}
 
 		if ( mesh.geometry.morphAnimations !== undefined ) {
 
-			mesh.mixer.addAction( new THREE.AnimationAction( mesh.geometry.morphAnimations[ 0 ] ) ) ;
+			for ( var i = 0; i < mesh.geometry.morphAnimations.length; i++ ) {
+
+				var action = mesh.mixer.clipAction( mesh.geometry.morphAnimations[ i ] );
+
+				if ( i === 0 ) {
+
+					action.play();
+
+				}
+
+			}
 
 		}
 
@@ -3825,47 +4070,56 @@ THREE.MMDHelper.prototype = {
 		if ( camera.animations !== undefined ) {
 
 			camera.mixer = new THREE.AnimationMixer( camera );
-			camera.mixer.addAction( new THREE.AnimationAction( camera.animations[ 0 ] ) );
+			camera.mixer.clipAction( camera.animations[ 0 ] ).play();
 
 		}
 
 	},
 
-	unifyAnimationDuration: function () {
+	/*
+	 * detect the longest duration among model, camera, and audio animation and then
+	 * set it to them to sync.
+	 * TODO: touching private properties ( ._actions and ._clip ) so consider better way
+	 *       to access them for safe and modularity.
+	 */
+	unifyAnimationDuration: function ( params ) {
+
+		params = params === undefined ? {} : params;
 
 		var max = 0.0;
 
 		var camera = this.camera;
 		var audioManager = this.audioManager;
 
+		// check the longest duration
 		for ( var i = 0; i < this.meshes.length; i++ ) {
 
 			var mesh = this.meshes[ i ];
 			var mixer = mesh.mixer;
 
-			if ( mixer === null || mesh === undefined ) {
+			if ( mixer === null ) {
 
 				continue;
 
 			}
 
-			for ( var j = 0; j < mixer.actions.length; j++ ) {
+			for ( var j = 0; j < mixer._actions.length; j++ ) {
 
-				var action = mixer.actions[ j ];
-				max = Math.max( max, action.clip.duration );
+				var action = mixer._actions[ j ];
+				max = Math.max( max, action._clip.duration );
 
 			}
 
 		}
 
-		if ( camera !== null && camera.mixer !== undefined ) {
+		if ( camera !== null && camera.mixer !== null ) {
 
 			var mixer = camera.mixer;
 
-			for ( var i = 0; i < mixer.actions.length; i++ ) {
+			for ( var i = 0; i < mixer._actions.length; i++ ) {
 
-				var action = mixer.actions[ i ];
-				max = Math.max( max, action.clip.duration );
+				var action = mixer._actions[ i ];
+				max = Math.max( max, action._clip.duration );
 
 			}
 
@@ -3877,34 +4131,41 @@ THREE.MMDHelper.prototype = {
 
 		}
 
+		if ( params.afterglow !== undefined ) {
+
+			max += params.afterglow;
+
+		}
+
+		// set the duration
 		for ( var i = 0; i < this.meshes.length; i++ ) {
 
 			var mesh = this.meshes[ i ];
 			var mixer = mesh.mixer;
 
-			if ( mixer === null || mesh === undefined ) {
+			if ( mixer === null ) {
 
 				continue;
 
 			}
 
-			for ( var j = 0; j < mixer.actions.length; j++ ) {
+			for ( var j = 0; j < mixer._actions.length; j++ ) {
 
-				var action = mixer.actions[ j ];
-				action.clip.duration = max;
+				var action = mixer._actions[ j ];
+				action._clip.duration = max;
 
 			}
 
 		}
 
-		if ( camera !== null && camera.mixer !== undefined ) {
+		if ( camera !== null && camera.mixer !== null ) {
 
 			var mixer = camera.mixer;
 
-			for ( var i = 0; i < mixer.actions.length; i++ ) {
+			for ( var i = 0; i < mixer._actions.length; i++ ) {
 
-				var action = mixer.actions[ i ];
-				action.clip.duration = max;
+				var action = mixer._actions[ i ];
+				action._clip.duration = max;
 
 			}
 
@@ -3954,6 +4215,9 @@ THREE.MMDHelper.prototype = {
 
 			mixer.update( delta );
 
+			// workaround until I make IK and Physics Animation plugin
+			this.backupBones( mesh );
+
 		}
 
 		if ( ikSolver !== null && this.doIk === true ) {
@@ -3980,10 +4244,13 @@ THREE.MMDHelper.prototype = {
 
 		var mixer = this.camera.mixer;
 
-		if ( mixer !== null && mixer !== undefined &&
-		     this.camera.center !== undefined && this.doCameraAnimation === true ) {
+		if ( mixer !== null && this.camera.center !== undefined && this.doCameraAnimation === true ) {
 
 			mixer.update( delta );
+
+			// TODO: Let PerspectiveCamera automatically update?
+			this.camera.updateProjectionMatrix();
+
 			this.camera.lookAt( this.camera.center );
 
 		}
@@ -4004,6 +4271,13 @@ THREE.MMDHelper.prototype = {
 
 		}
 
+		// workaround until I make IK and Physics Animation plugin
+		for ( var i = 0; i < this.meshes.length; i++ ) {
+
+			this.restoreBones( this.meshes[ i ] );
+
+		}
+
 	},
 
 	renderMain: function ( scene, camera ) {
@@ -4015,8 +4289,13 @@ THREE.MMDHelper.prototype = {
 
 	renderOutline: function ( scene, camera ) {
 
+		var tmpEnabled = this.renderer.shadowMap.enabled;
+		this.renderer.shadowMap.enabled = false;
+
 		this.setupOutlineRendering();
 		this.renderer.render( scene, camera );
+
+		this.renderer.shadowMap.enabled = tmpEnabled;
 
 	},
 
@@ -4036,7 +4315,25 @@ THREE.MMDHelper.prototype = {
 
 			var m = mesh.material.materials[ i ];
 			m.uniforms.outlineDrawing.value = 0;
-			m.side = THREE.DoubleSide;
+			m.visible = true;
+
+			if ( m.opacity === 1.0 ) {
+
+				m.side = THREE.FrontSide;
+				m.transparent = false;
+
+			} else {
+
+				m.side = THREE.DoubleSide;
+				m.transparent = true;
+
+			}
+
+			if ( m.textureTransparency === true || m.morphTransparency === true ) {
+
+				m.transparent = true;
+
+			}
 
 		}
 
@@ -4050,8 +4347,6 @@ THREE.MMDHelper.prototype = {
 
 		}
 
-		this.renderer.state.setBlending( THREE.NoBlending );
-
 	},
 
 	setupOutlineRenderingOneMesh: function ( mesh ) {
@@ -4061,6 +4356,18 @@ THREE.MMDHelper.prototype = {
 			var m = mesh.material.materials[ i ];
 			m.uniforms.outlineDrawing.value = 1;
 			m.side = THREE.BackSide;
+
+			if ( m.uniforms.outlineAlpha.value < 1.0 ) {
+
+				m.transparent = true;
+
+			}
+
+			if ( m.uniforms.outlineThickness.value === 0.0 ) {
+
+				m.visible = false;
+
+			}
 
 		}
 
@@ -4089,7 +4396,7 @@ THREE.MMDHelper.prototype = {
 
 	poseAsVpd: function ( mesh, vpd, params ) {
 
-		if ( ! ( params && params.preventRestPose === true ) ) {
+		if ( ! ( params && params.preventResetPose === true ) ) {
 
 			this.resetPose( mesh );
 
@@ -4144,7 +4451,64 @@ THREE.MMDHelper.prototype = {
 		var solver = new THREE.CCDIKSolver( mesh );
 		solver.update();
 
+	},
+
+	/*
+	 * Note: These following three functions are workaround for r74dev.
+	 *       THREE.PropertyMixer.apply() seems to save values into buffer cache
+	 *       when mixer.update() is called.
+	 *       ikSolver.update() and physics.update() change bone position/quaternion
+	 *       without mixer.update() then buffer cache will be inconsistent.
+	 *       So trying to avoid buffer cache inconsistency by doing
+	 *       backup bones position/quaternion right after mixer.update() call
+	 *       and then restore them after rendering.
+	 */
+	initBackupBones: function ( mesh ) {
+
+		mesh.skeleton.backupBones = [];
+
+		for ( var i = 0; i < mesh.skeleton.bones.length; i++ ) {
+
+			mesh.skeleton.backupBones.push( mesh.skeleton.bones[ i ].clone() );
+
+		}
+
+	},
+
+	backupBones: function ( mesh ) {
+
+		mesh.skeleton.backupBoneIsSaved = true;
+
+		for ( var i = 0; i < mesh.skeleton.bones.length; i++ ) {
+
+			var b = mesh.skeleton.backupBones[ i ];
+			var b2 = mesh.skeleton.bones[ i ];
+			b.position.copy( b2.position );
+			b.quaternion.copy( b2.quaternion );
+
+		}
+
+	},
+
+	restoreBones: function ( mesh ) {
+
+		if ( mesh.skeleton.backupBoneIsSaved !== true ) {
+
+			return;
+
+		}
+
+		mesh.skeleton.backupBoneIsSaved = false;
+
+		for ( var i = 0; i < mesh.skeleton.bones.length; i++ ) {
+
+			var b = mesh.skeleton.bones[ i ];
+			var b2 = mesh.skeleton.backupBones[ i ];
+			b.position.copy( b2.position );
+			b.quaternion.copy( b2.quaternion );
+
+		}
+
 	}
 
 };
-

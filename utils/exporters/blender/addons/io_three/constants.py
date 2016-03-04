@@ -93,7 +93,8 @@ LIGHTS = 'lights'
 HIERARCHY = 'hierarchy'
 FACE_MATERIALS = 'faceMaterials'
 SKINNING = 'skinning'
-COPY_TEXTURES = 'copyTextures'
+EXPORT_TEXTURES = 'exportTextures'
+EMBED_TEXTURES = 'embedTextures'
 TEXTURE_FOLDER = 'textureFolder'
 ENABLE_PRECISION = 'enablePrecision'
 PRECISION = 'precision'
@@ -153,7 +154,8 @@ EXPORT_OPTIONS = {
     CAMERAS: False,
     LIGHTS: False,
     HIERARCHY: False,
-    COPY_TEXTURES: True,
+    EXPORT_TEXTURES: True,
+    EMBED_TEXTURES: False,
     TEXTURE_FOLDER: '',
     LOGGING: DEBUG,
     ENABLE_PRECISION: True,
@@ -220,6 +222,7 @@ ROTATION = 'rotation'
 SCALE = 'scale'
 
 UV = 'uv'
+UV2 = 'uv2'
 ATTRIBUTES = 'attributes'
 NORMAL = 'normal'
 ITEM_SIZE = 'itemSize'
@@ -272,7 +275,6 @@ SCL = 'scl'
 TIME = 'time'
 KEYS = 'keys'
 
-AMBIENT = 'ambient'
 COLOR = 'color'
 EMISSIVE = 'emissive'
 SPECULAR = 'specular'
@@ -339,6 +341,7 @@ INTENSITY = 'intensity'
 DISTANCE = 'distance'
 ASPECT = 'aspect'
 ANGLE = 'angle'
+DECAY = 'decayExponent'
 
 FOV = 'fov'
 ASPECT = 'aspect'
@@ -352,7 +355,6 @@ BOTTOM = 'bottom'
 
 SHADING = 'shading'
 COLOR_DIFFUSE = 'colorDiffuse'
-COLOR_AMBIENT = 'colorAmbient'
 COLOR_EMISSIVE = 'colorEmissive'
 COLOR_SPECULAR = 'colorSpecular'
 DBG_NAME = 'DbgName'

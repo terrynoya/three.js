@@ -24,7 +24,7 @@ THREE.MMDPhysics = function ( mesh, params ) {
 	/*
 	 * Note: Default 1 / 65 unit step is a workaround that
 	 *       some bones go wrong at near 60fps if it's 1 / 60.
-	 *       Be careful that large unitStep could cause heavy
+	 *       Be careful that small unitStep could cause heavy
 	 *       physics calculation.
 	 */
 	this.unitStep = ( params && params.unitStep ) ? params.unitStep : 1 / 65;
