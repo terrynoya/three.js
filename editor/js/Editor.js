@@ -267,6 +267,12 @@ Editor.prototype = {
 
 			} else if ( object instanceof THREE.SkinnedMesh ) {
 
+				if ( object.name === 'miku_v2.pmd' ) {
+
+					return;
+
+				}
+
 				helper = new THREE.SkeletonHelper( object );
 
 			} else {
@@ -454,7 +460,6 @@ Editor.prototype = {
 
 		this.history.fromJSON( json.history );
 		this.scripts = json.scripts;
-
 		this.setScene( loader.parse( json.scene ) );
 
 	},

@@ -2016,6 +2016,8 @@ THREE.MMDLoader.prototype.createMesh = function ( model, texturePath, onProgress
 
 				}
 
+				delete texture.readyCallbacks;
+
 			} );
 
 			texture.readyCallbacks = [];

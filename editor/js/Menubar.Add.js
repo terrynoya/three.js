@@ -289,6 +289,38 @@ Menubar.Add = function ( editor ) {
 	} );
 	options.add( option );
 
+	// Miku
+
+	var option = new UI.Row();
+	option.setClass( 'option' );
+	option.setTextContent( 'Miku' );
+	option.onClick( function () {
+
+		var filename = 'miku_v2.pmd';
+		var path = '../examples/models/mmd/';
+		var modelPath = path + '/miku/' + filename;
+		var loader = new THREE.MMDLoader();
+		loader.setDefaultTexturePath( '../examples/models/mmd/default/' );
+		object = loader.loadModel( modelPath, function ( object ) {
+
+			var bones = object.skeleton.bones;
+			var bones2 = object.geometry.bones;
+			for ( var i = 0; i < bones.length; i++ ) {
+
+				bones[ i ].name = bones[ i ].originalName;
+				bones2[ i ].name = bones2[ i ].originalName;
+
+			}
+
+			object.name = filename;
+
+			editor.execute( new AddObjectCommand( object ) );
+
+		} );
+
+	} );
+	options.add( option );
+
 	//
 
 	options.add( new UI.HorizontalRule() );
