@@ -470,9 +470,23 @@ var Loader = function ( editor ) {
 
 				var mesh;
 
-				if ( geometry.animation && geometry.animation.hierarchy ) {
+				if ( geometry.bones !== undefined ) {
 
 					mesh = new THREE.SkinnedMesh( geometry, material );
+
+					if ( mesh.material instanceof THREE.MultiMaterial ) {
+
+						for ( var i = 0; i < mesh.material.materials.length; i++ ) {
+
+							mesh.material.materials[ i ].skinning = true;
+
+						}
+
+					} else {
+
+						mesh.material.skinning = true;
+
+					}
 
 				} else {
 

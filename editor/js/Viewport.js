@@ -47,11 +47,18 @@ var Viewport = function ( editor ) {
 
 			selectionBox.update( object );
 
-			if ( editor.helpers[ object.id ] !== undefined ) {
+			function updateHelper ( object ) {
 
-				editor.helpers[ object.id ].update();
+				if ( editor.helpers[ object.id ] !== undefined ) {
+
+					editor.helpers[ object.id ].update();
+
+				}
 
 			}
+
+			updateHelper( object );
+			object.traverseAncestors( updateHelper );
 
 			signals.refreshSidebarObject3D.dispatch( object );
 
