@@ -415,7 +415,7 @@ Object.assign( THREE.ObjectLoader.prototype, {
 
 		var matrix = new THREE.Matrix4();
 
-		return function ( data, geometries, materials ) {
+		return function ( data, geometries, materials, parent ) {
 
 			var object;
 
@@ -502,7 +502,6 @@ Object.assign( THREE.ObjectLoader.prototype, {
 					break;
 
 				case 'Mesh':
-				case 'SkinnedMesh':
 
 					var geometry = getGeometry( data.geometry );
 					var material = getMaterial( data.material );
@@ -516,6 +515,41 @@ Object.assign( THREE.ObjectLoader.prototype, {
 						object = new THREE.Mesh( geometry, material );
 
 					}
+
+					break;
+
+				case 'SkinnedMesh':
+
+					var geometry = getGeometry( data.geometry );
+					var material = getMaterial( data.material );
+
+					if ( data.skeleton === undefined ) {
+
+						object = new THREE.SkinnedMesh( geometry, material );
+
+					} else {
+
+						object = new THREE.SkinnedMesh( geometry, material, undefined, true );
+
+					}
+
+					break;
+
+				case 'Bone':
+
+					var skin;
+
+					if ( parent instanceof THREE.SkinnedMesh ) {
+
+						skin = parent;
+
+					} else if ( parent instanceof THREE.Bone ) {
+
+						skin = parent.skin;
+
+					}
+
+					object = new THREE.Bone( skin );
 
 					break;
 
@@ -588,7 +622,7 @@ Object.assign( THREE.ObjectLoader.prototype, {
 
 				for ( var child in data.children ) {
 
-					object.add( this.parseObject( data.children[ child ], geometries, materials ) );
+					object.add( this.parseObject( data.children[ child ], geometries, materials, object ) );
 
 				}
 
@@ -613,91 +647,12 @@ Object.assign( THREE.ObjectLoader.prototype, {
 
 			}
 
-			/*
-			 * Now SkinnedMesh could have two bone sets in its children,
-			 * one is made from geometry.bones in SkinnedMesh constroctor
-			 * and another one is made from data.children in this method.
-			 * These two bone sets correspond to the same bones.
-			 * The former would represent a default stand pose while
-			 * the latter would represent a pose updated by skinning.
-			 * To let SkinnedMesh be updated pose, here this logic copies
-			 * the latter one to the former one then removes the latter one.
-			 * If in the latter one there're objects which don't correspond to
-			 * the ones in the former one, they'll be moved to the former one.
-			 */
-			if ( object.type === 'SkinnedMesh' ) {
+			if ( data.type === 'SkinnedMesh' && data.skeleton !== undefined ) {
 
-				function copyBone ( bone, bone2 ) {
-
-					bone.position.copy( bone2.position );
-					bone.rotation.copy( bone2.rotation );
-					bone.scale.copy( bone2.scale );
-					bone.updateMatrixWorld();
-
-				}
-
-				function traverseBones ( object, object2 ) {
-
-					for ( var i = 0; i < object2.children.length; i ++ ) {
-
-						var child2 = object2.children[ i ];
-
-						var found = false;
-
-						if ( child2.type === 'Bone' ) {
-
-							for ( var j = 0; j < object.children.length; j ++ ) {
-
-								var child = object.children[ j ];
-
-								if ( child.type === 'Bone' && child.name === child2.name ) {
-
-									copyBone( child, child2 );
-									traverseBones( child, child2 );
-									found = true;
-
-									break;
-
-								}
-
-							}
-
-						}
-
-						if ( ! found ) {
-
-							object.add( child2 );
-
-						}
-
-					}
-
-				}
-
-				for ( var i = 0; i < object.children.length; i ++ ) {
-
-					var child = object.children[ i ];
-
-					if ( child.type === 'Bone' ) {
-
-						for ( var j = i + 1; j < object.children.length; j ++ ) {
-
-							var child2 = object.children[ j ];
-
-							if ( child2.type === 'Bone' && child.name === child2.name ) {
-
-								copyBone( child, child2 );
-								traverseBones( child, child2 );
-								object.remove( child2 );
-								break;
-
-							}
-
-						}
-
-					}
-
-				}
+				object.bind( object.createSkeletonFromJSON( data.skeleton ), object.matrixWorld );
+				object.bindMode = data.bindMode;
+				object.bindMatrix.fromArray( data.bindMatrix );
+				object.updateMatrixWorld( true );
 
 			}
 

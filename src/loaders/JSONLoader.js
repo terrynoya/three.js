@@ -518,7 +518,7 @@ Object.assign( THREE.JSONLoader.prototype, {
 
 			for ( var i = 0; i < animations.length; i ++ ) {
 
-				var clip = THREE.AnimationClip.parseAnimation( animations[ i ], geometry.bones );
+				var clip = animation[ i ].tracks !== undefined ? THREE.AnimationClip.parse( animations[ i ] ) ? THREE.AnimationClip.parseAnimation( animations[ i ], geometry.bones );
 				if ( clip ) outputAnimations.push( clip );
 
 			}

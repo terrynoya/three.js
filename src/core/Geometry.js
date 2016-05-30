@@ -1086,6 +1086,18 @@ Object.assign( THREE.Geometry.prototype, THREE.EventDispatcher.prototype, {
 
 		}
 
+		var animations = [];
+
+		if ( this.animations !== undefined ) {
+
+			for ( var i = 0; i < this.animations.length; i ++ ) {
+
+				animations.push( THREE.AnimationClip.toJSON( this.animations[ i ] ) );
+
+			}
+
+		}
+
 		function setBit( value, position, enabled ) {
 
 			return enabled ? value | ( 1 << position ) : value & ( ~ ( 1 << position ) );
@@ -1154,6 +1166,7 @@ Object.assign( THREE.Geometry.prototype, THREE.EventDispatcher.prototype, {
 		if ( skinIndices.length > 0 ) data.data.skinIndices = skinIndices;
 		if ( skinWeights.length > 0 ) data.data.skinWeights = skinWeights;
 		if ( influencesPerVertex > 0 ) data.data.influencesPerVertex = influencesPerVertex;
+		if ( animations.length > 0 ) data.data.animations = animations;
 
 		return data;
 
