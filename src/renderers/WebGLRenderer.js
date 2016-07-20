@@ -265,7 +265,7 @@ THREE.WebGLRenderer = function ( parameters ) {
 	var backgroundCamera2 = new THREE.PerspectiveCamera();
 	var backgroundPlaneMesh = new THREE.Mesh(
 		new THREE.PlaneBufferGeometry( 2, 2 ),
-		new THREE.MeshBasicMaterial( { depthTest: false, depthWrite: false } )
+		new THREE.MeshBasicMaterial( { depthTest: false, depthWrite: false, fog: false } )
 	);
 	var backgroundBoxShader = THREE.ShaderLib[ 'cube' ];
 	var backgroundBoxMesh = new THREE.Mesh(
@@ -274,13 +274,12 @@ THREE.WebGLRenderer = function ( parameters ) {
 			uniforms: backgroundBoxShader.uniforms,
 			vertexShader: backgroundBoxShader.vertexShader,
 			fragmentShader: backgroundBoxShader.fragmentShader,
+			side: THREE.BackSide,
 			depthTest: false,
 			depthWrite: false,
-			side: THREE.BackSide
+			fog: false
 		} )
 	);
-	objects.update( backgroundPlaneMesh );
-	objects.update( backgroundBoxMesh );
 
 	//
 
@@ -335,7 +334,7 @@ THREE.WebGLRenderer = function ( parameters ) {
 
 	// shadow map
 
-	var shadowMap = new THREE.WebGLShadowMap( this, _lights, objects );
+	var shadowMap = new THREE.WebGLShadowMap( this, _lights, objects, capabilities );
 
 	this.shadowMap = shadowMap;
 
@@ -1042,6 +1041,10 @@ THREE.WebGLRenderer = function ( parameters ) {
 
 			return a.object.renderOrder - b.object.renderOrder;
 
+		} else if ( a.material.program && b.material.program && a.material.program !== b.material.program ) {
+
+			return a.material.program.id - b.material.program.id;
+
 		} else if ( a.material.id !== b.material.id ) {
 
 			return a.material.id - b.material.id;
@@ -1188,11 +1191,15 @@ THREE.WebGLRenderer = function ( parameters ) {
 			backgroundBoxMesh.material.uniforms[ "tCube" ].value = background;
 			backgroundBoxMesh.modelViewMatrix.multiplyMatrices( backgroundCamera2.matrixWorldInverse, backgroundBoxMesh.matrixWorld );
 
+			objects.update( backgroundBoxMesh );
+
 			_this.renderBufferDirect( backgroundCamera2, null, backgroundBoxMesh.geometry, backgroundBoxMesh.material, backgroundBoxMesh, null );
 
 		} else if ( background instanceof THREE.Texture ) {
 
 			backgroundPlaneMesh.material.map = background;
+
+			objects.update( backgroundPlaneMesh );
 
 			_this.renderBufferDirect( backgroundCamera, null, backgroundPlaneMesh.geometry, backgroundPlaneMesh.material, backgroundPlaneMesh, null );
 
