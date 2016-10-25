@@ -1,11 +1,9 @@
-var _Math;
-
 /**
  * @author alteredq / http://alteredqualia.com/
  * @author mrdoob / http://mrdoob.com/
  */
 
-_Math = {
+var _Math = {
 
 	DEG2RAD: Math.PI / 180,
 	RAD2DEG: 180 / Math.PI,
@@ -67,6 +65,14 @@ _Math = {
 	mapLinear: function ( x, a1, a2, b1, b2 ) {
 
 		return b1 + ( x - a1 ) * ( b2 - b1 ) / ( a2 - a1 );
+
+	},
+
+	// https://en.wikipedia.org/wiki/Linear_interpolation
+
+	lerp: function ( x, y, t ) {
+
+		return ( 1 - t ) * x + t * y;
 
 	},
 
