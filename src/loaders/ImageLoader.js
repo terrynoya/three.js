@@ -1,4 +1,4 @@
-import { XHRLoader } from './XHRLoader';
+import { FileLoader } from './FileLoader';
 import { DefaultLoadingManager } from './LoadingManager';
 
 /**
@@ -35,9 +35,16 @@ Object.assign( ImageLoader.prototype, {
 
 			image.src = url;
 
+		} else if ( this.crossOrigin !== undefined ) {
+
+			// crossOrigin doesn't work with URL.createObjectURL()?
+
+			image.crossOrigin = this.crossOrigin;
+			image.src = url;
+
 		} else {
 
-			var loader = new XHRLoader();
+			var loader = new FileLoader();
 			loader.setPath( this.path );
 			loader.setResponseType( 'blob' );
 			loader.setWithCredentials( this.withCredentials );

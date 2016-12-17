@@ -15,9 +15,11 @@ import { _Math } from '../math/Math';
  * @author elephantatwork / www.elephantatwork.ch
  */
 
+var object3DId = 0;
+
 function Object3D() {
 
-	Object.defineProperty( this, 'id', { value: Object3DIdCount() } );
+	Object.defineProperty( this, 'id', { value: object3DId ++ } );
 
 	this.uuid = _Math.generateUUID();
 
@@ -91,8 +93,8 @@ function Object3D() {
 
 	this.userData = {};
 
-	this.onBeforeRender = function(){}; 
-	this.onAfterRender = function(){};
+	this.onBeforeRender = function () {};
+	this.onAfterRender = function () {};
 
 }
 
@@ -306,7 +308,7 @@ Object.assign( Object3D.prototype, EventDispatcher.prototype, {
 
 		}
 
-		if ( (object && object.isObject3D) ) {
+		if ( ( object && object.isObject3D ) ) {
 
 			if ( object.parent !== null ) {
 
@@ -700,6 +702,7 @@ Object.assign( Object3D.prototype, EventDispatcher.prototype, {
 		this.matrixAutoUpdate = source.matrixAutoUpdate;
 		this.matrixWorldNeedsUpdate = source.matrixWorldNeedsUpdate;
 
+		this.layers.mask = source.layers.mask;
 		this.visible = source.visible;
 
 		this.castShadow = source.castShadow;
@@ -727,8 +730,4 @@ Object.assign( Object3D.prototype, EventDispatcher.prototype, {
 
 } );
 
-var count = 0;
-function Object3DIdCount() { return count++; };
-
-
-export { Object3DIdCount, Object3D };
+export { Object3D };
