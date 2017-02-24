@@ -203,6 +203,7 @@
 				}
 
 				loader = new THREE.GLTF2Loader();
+				loader.setCrossOrigin( 'anonymous' );
 
 				for (var i = 0; i < extensionSelect.children.length; i++) {
 					var child = extensionSelect.children[i];
