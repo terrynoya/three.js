@@ -74,6 +74,12 @@ THREE.GLTF2Loader = ( function () {
 
 			}
 
+			if ( json.extensionsUsed && json.extensionsUsed.indexOf( EXTENSIONS.FRAUNHOFER_MATERIALS_PBR ) >= 0 ) {
+
+				extensions[ EXTENSIONS.FRAUNHOFER_MATERIALS_PBR ] = new GLTFMaterialsPBRExtension( json );
+
+			}
+
 			console.time( 'GLTF2Loader' );
 
 			var parser = new GLTFParser( json, extensions, {
@@ -263,7 +269,8 @@ THREE.GLTF2Loader = ( function () {
 
 	var EXTENSIONS = {
 		KHR_BINARY_GLTF: 'KHR_binary_glTF',
-		KHR_MATERIALS_COMMON: 'KHR_materials_common'
+		KHR_MATERIALS_COMMON: 'KHR_materials_common',
+		FRAUNHOFER_MATERIALS_PBR: 'FRAUNHOFER_materials_pbr'
 	};
 
 	/* MATERIALS COMMON EXTENSION */
@@ -375,6 +382,115 @@ THREE.GLTF2Loader = ( function () {
 		var stringData = convertUint8ArrayToString( new Uint8Array( bufferView ) );
 
 		return 'data:' + metadata.mimeType + ';base64,' + btoa( stringData );
+
+	};
+
+	/* MATERIALS PBR EXTENSION */
+
+	var PBR_EXTENSION_METAL_ROUGHNESS_MODEL = 'PBR_metal_roughness';
+
+	function GLTFMaterialsPBRExtension () {
+
+		this.name = EXTENSIONS.FRAUNHOFER_MATERIALS_PBR;
+
+	}
+
+	GLTFMaterialsPBRExtension.prototype.createMaterial = function (material, dependencies) {
+
+		if ( material.materialModel !== PBR_EXTENSION_METAL_ROUGHNESS_MODEL ) {
+
+			throw new Error( '[GLTFMaterialsPBRExtension] Unsupported material model "%s".', material.materialModel );
+
+		}
+
+		var materialValues = material.values;
+		var materialParams = {};
+
+		// Ambient occlusion.
+
+		if ( materialValues.aoFactor !== undefined ) {
+
+			materialParams.aoMapIntensity = materialValues.aoFactor;
+
+		}
+
+		if ( typeof( materialValues.aoTexture ) === 'string' ) {
+
+			materialParams.aoMap = dependencies.textures[ materialValues.aoTexture ];
+
+		}
+
+		// Color.
+
+		if ( Array.isArray( materialValues.baseColorFactor ) ) {
+
+			materialParams.color = new THREE.Color().fromArray( materialValues.baseColorFactor ).getHex();
+
+		}
+
+		if ( typeof( materialValues.baseColorTexture ) === 'string' ) {
+
+			materialParams.map = dependencies.textures[ materialValues.baseColorTexture ];
+
+		}
+
+		// Emissive.
+
+		if ( materialValues.emissiveFactor !== undefined ) {
+
+			materialParams.emissive = new THREE.Color().fromArray( materialValues.emissiveFactor );
+
+		}
+
+		if ( typeof( materialValues.emissiveTexture ) === 'string' ) {
+
+			materialParams.emissiveMap = dependencies.textures[ materialValues.emissiveTexture ];
+
+		}
+
+		// Metalness.
+
+		if ( materialValues.metallicFactor !== undefined ) {
+
+			materialParams.metalness = materialValues.metallicFactor;
+
+		}
+
+		if ( typeof( materialValues.metallicTexture ) === 'string' ) {
+
+			materialParams.metalnessMap = dependencies.textures[ materialValues.metallicTexture ];
+
+		}
+
+		// Normals.
+
+		// if ( materialValues.normalFactor !== undefined ) {
+
+		// 	materialParams.normalScale = materialValues.normalFactor;
+
+		// }
+
+		if ( typeof( materialValues.normalTexture ) === 'string' ) {
+
+			materialParams.normalMap = dependencies.textures[ materialValues.normalTexture ];
+
+		}
+
+		// Roughness.
+
+		if ( materialValues.roughnessFactor !== undefined ) {
+
+			materialParams.roughness = materialValues.roughnessFactor;
+
+		}
+
+		if ( typeof( materialValues.roughnessTexture ) === 'string' ) {
+
+			materialParams.roughnessMap = dependencies.textures[ materialValues.roughnessTexture ];
+
+		}
+
+		return new THREE.MeshStandardMaterial( materialParams );
 
 	};
 
@@ -1122,6 +1238,7 @@ THREE.GLTF2Loader = ( function () {
 	GLTFParser.prototype.loadMaterials = function () {
 
 		var json = this.json;
+		var extensions = this.extensions;
 
 		return this._withDependencies( [
 
@@ -1137,10 +1254,15 @@ THREE.GLTF2Loader = ( function () {
 				var materialParams = {};
 
 				var khr_material;
+				var pbr_material;
 
 				if ( material.extensions && material.extensions[ EXTENSIONS.KHR_MATERIALS_COMMON ] ) {
 
 					khr_material = material.extensions[ EXTENSIONS.KHR_MATERIALS_COMMON ];
+
+				} else if ( material.extensions && material.extensions[ EXTENSIONS.FRAUNHOFER_MATERIALS_PBR ] ) {
+
+					pbr_material = material.extensions[ EXTENSIONS.FRAUNHOFER_MATERIALS_PBR ];
 
 				}
 
@@ -1188,11 +1310,25 @@ THREE.GLTF2Loader = ( function () {
 
 					}
 
+				} else if ( pbr_material ) {
+
+					var pbrExtension = extensions[ EXTENSIONS.FRAUNHOFER_MATERIALS_PBR ];
+					pbr_material = pbrExtension.createMaterial( pbr_material, dependencies );
+
+					if ( material.name !== undefined ) pbr_material.name = material.name;
+
+					return pbr_material;
+
 				} else if ( material.technique === undefined ) {
 
-					materialType = THREE.MeshPhongMaterial;
+					//materialType = THREE.MeshPhongMaterial;
+					materialType = THREE.MeshStandardMaterial;
 
 					Object.assign( materialValues, material.values );
+					Object.assign( materialValues, material );
+
+					console.log(materialValues);
+					console.log(dependencies);
 
 				} else {
 
@@ -1467,6 +1603,53 @@ THREE.GLTF2Loader = ( function () {
 						}
 
 					}
+
+				}
+
+				if ( materialValues.pbrMetallicRoughness !== undefined ) {
+
+					if ( Array.isArray( materialValues.pbrMetallicRoughness.baseColorFactor ) ) {
+
+						materialParams.color = new THREE.Color().fromArray( materialValues.pbrMetallicRoughness.baseColorFactor ).getHex();
+
+					}
+
+					if ( materialValues.pbrMetallicRoughness.baseColorTexture !== undefined ) {
+
+						materialParams.map = dependencies.textures[ materialValues.pbrMetallicRoughness.baseColorTexture.index ];
+
+					}
+
+					if ( materialValues.pbrMetallicRoughness.metallicRoughnessTexture !== undefined ) {
+
+						materialParams.roughnessMap = dependencies.textures[ materialValues.pbrMetallicRoughness.metallicRoughnessTexture.index ];
+						materialParams.roughness = 0.6; // default value 0.5 is too shiny?
+
+					}
+
+				}
+
+				if ( materialValues.normalTexture !== undefined ) {
+
+					materialParams.normalMap = dependencies.textures[ materialValues.normalTexture.index ];
+
+				}
+
+				if ( materialValues.occlusionTexture !== undefined ) {
+
+					materialParams.aoMap = dependencies.textures[ materialValues.occlusionTexture.index ];
+
+				}
+
+				if ( materialValues.emissiveTexture !== undefined ) {
+
+					materialParams.emissiveMap = dependencies.textures[ materialValues.emissiveTexture.index ];
+
+				}
+
+				if ( materialValues.emissiveFactor !== undefined ) {
+
+					materialParams.emissive = new THREE.Color().fromArray( materialValues.emissiveFactor );
 
 				}
 
