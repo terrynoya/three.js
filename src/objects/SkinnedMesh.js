@@ -23,7 +23,7 @@ function SkinnedMesh( geometry, material ) {
 	var bones = this.initBones();
 	var skeleton = new Skeleton( bones );
 
-	this.bind( skeleton, this.matrixWorld );
+	this.bind( skeleton, this.matrixWorld, this );
 
 	this.normalizeSkinWeights();
 
@@ -84,6 +84,16 @@ SkinnedMesh.prototype = Object.assign( Object.create( Mesh.prototype ), {
 
 			}
 
+			for ( i = 0, il = bones.length; i < il; i ++ ) {
+
+				if ( bones[ i ].parent === null ) {
+
+					bones[ i ].updateMatrixWorld( true );
+
+				}
+
+			}
+
 		}
 
 		// now the bones are part of the scene graph and children of the skinned mesh.
@@ -95,7 +105,9 @@ SkinnedMesh.prototype = Object.assign( Object.create( Mesh.prototype ), {
 
 	},
 
-	bind: function ( skeleton, bindMatrix ) {
+	bind: function ( skeleton, bindMatrix, master ) {
+
+		if ( master !== undefined ) this.master = master;
 
 		this.skeleton = skeleton;
 
@@ -181,9 +193,47 @@ SkinnedMesh.prototype = Object.assign( Object.create( Mesh.prototype ), {
 
 		Mesh.prototype.updateMatrixWorld.call( this, force );
 
+		var parent;
+
+		if ( this.skeleton ) {
+
+			var bones = this.skeleton.bones;
+
+			for ( var i = 0, il = bones.length; i < il; i++ ) {
+
+				if ( bones[ i ].parent === null ) {
+
+					break;
+
+				}
+
+				if ( bones[ i ].parent.isBone !== true ) {
+
+					parent = bones[ i ].parent;
+					break;
+
+				}
+
+			}
+
+		}
+
+
 		if ( this.bindMode === 'attached' ) {
 
-			this.bindMatrixInverse.getInverse( this.matrixWorld );
+			if ( this.master !== undefined ) {
+
+				this.bindMatrixInverse.getInverse( this.master.matrixWorld );
+
+			} else if ( parent === undefined ) {
+
+				this.bindMatrixInverse.set( 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 );
+
+			} else {
+
+				this.bindMatrixInverse.getInverse( parent.matrixWorld );
+
+			}
 
 		} else if ( this.bindMode === 'detached' ) {
 
