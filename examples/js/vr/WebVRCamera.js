@@ -138,7 +138,7 @@ THREE.WebVRCamera = function ( display, renderer ) {
 
 	this.onAfterRender = function () {
 
-		if ( display.isPresenting ) display.submitFrame();
+		//if ( display.isPresenting ) display.submitFrame();
 
 	};
 
