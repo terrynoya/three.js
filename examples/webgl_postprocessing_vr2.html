@@ -83,6 +83,7 @@
 				camera = new THREE.WebVRCamera( vrdisplay, renderer );
 
 				controls = new THREE.VRControls( camera );
+				controls.setVRDisplay( vrdisplay );
 
 				//
 
@@ -92,13 +93,11 @@
 				object = new THREE.Object3D();
 				scene.add( object );
 
-				/*
 				var dummy = new THREE.Camera();
 				dummy.position.z = 400;
 				dummy.add( camera );
 
 				scene.add( dummy );
-				*/
 
 				var geometry = new THREE.SphereGeometry( 1, 4, 4 );
 				var material = new THREE.MeshPhongMaterial( { color: 0xffffff, shading: THREE.FlatShading } );
@@ -157,6 +156,7 @@
 
 				//
 
+				window.addEventListener( 'vrdisplaypresentchange', onWindowResize, false );
 				window.addEventListener( 'resize', onWindowResize, false );
 
 				onWindowResize();
@@ -183,7 +183,7 @@
 				object.rotation.y += 0.01;
 
 				composer.render();
-				vrdisplay.submitFrame();
+				if ( vrdisplay.isPresenting ) vrdisplay.submitFrame();
 
 			}
 
