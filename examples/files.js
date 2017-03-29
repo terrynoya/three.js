@@ -220,6 +220,7 @@ var files = {
 		"webgl_postprocessing_unreal_bloom",
 		"webgl_postprocessing_vr",
 		"webgl_postprocessing_vr2",
+		"webgl_postprocessing_vr3",
 		"webgl_raycast_texture",
 		"webgl_read_float_buffer",
 		"webgl_rtt",
