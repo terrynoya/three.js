@@ -157,6 +157,8 @@ THREE.ShaderVRPass.prototype = Object.assign( Object.create( THREE.Pass.prototyp
 		var uv = this.quad.geometry.attributes.uv
 		var array = uv.array;
 
+		// TODO: these parameters should be from vrDisplay maybe?
+
 		if ( num === 0 ) { // left
 
 			array[ 0 ] = 0.0;
