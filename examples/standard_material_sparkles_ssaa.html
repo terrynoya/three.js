@@ -9,11 +9,20 @@
 		<script src="../build/three.js"></script>
 		<script src="js/controls/OrbitControls.js"></script>
 
+		<script src="js/shaders/CopyShader.js"></script>
+
+		<script src="js/postprocessing/EffectComposer.js"></script>
+		<script src="js/postprocessing/SSAARenderPass.js"></script>
+		<script src="js/postprocessing/RenderPass.js"></script>
+		<script src="js/postprocessing/MaskPass.js"></script>
+		<script src="js/postprocessing/ShaderPass.js"></script>
+
 		<script>
 
 			var container;
 
 			var mesh, camera, scene, renderer;
+			var composer, copyPass, ssaaRenderPass;
 
 			var mouseX = 0, mouseY = 0;
 
@@ -43,7 +52,7 @@
 
 				//
 
-				renderer = new THREE.WebGLRenderer( { antialias: true } );
+				renderer = new THREE.WebGLRenderer( { antialias: false } );
 				renderer.setPixelRatio( window.devicePixelRatio );
 				renderer.setSize( window.innerWidth, window.innerHeight );
 				renderer.setClearColor( new THREE.Color( 0xffffff ) );
@@ -58,6 +67,17 @@
 				material.metalness = 1;
 				material.roughness = 0;
 				scene.add( mesh );
+
+				// postprocessing
+
+				composer = new THREE.EffectComposer( renderer );
+
+				ssaaRenderPass = new THREE.SSAARenderPass( scene, camera, 0xFFFFFF, 1.0 );
+				composer.addPass( ssaaRenderPass );
+
+				copyPass = new THREE.ShaderPass( THREE.CopyShader );
+				copyPass.renderToScreen = true;
+				composer.addPass( copyPass );
 
 				var controls = new THREE.OrbitControls( camera, renderer.domElement );
 				controls.update();
@@ -76,6 +96,11 @@
 
 				renderer.setSize( window.innerWidth, window.innerHeight );
 
+				var pixelRatio = renderer.getPixelRatio();
+				var newWidth  = Math.floor( window.innerWidth / pixelRatio ) || 1;
+				var newHeight = Math.floor( window.innerHeight / pixelRatio ) || 1;
+				composer.setSize( newWidth, newHeight );
+
 			}
 
 			//
@@ -90,7 +115,7 @@
 
 			function render() {
 
-				renderer.render( scene, camera );
+				composer.render();
 
 			}
 
