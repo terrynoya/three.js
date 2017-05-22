@@ -2,44 +2,44 @@
  * @author takahirox / http://github.com/takahirox
  */
 
-THREE.ShaderVRPass = function ( pass, pass2 ) {
+/**
+ * @params {VRDisplay} vrDisplay
+ * @params {THREE.ShaderPass} passLeft - ShaderPass instance for left eye sight.
+ *                                       passLeft is also used for non presenting mode.
+ * @params {THREE.ShaderPass} passRight - ShaderPass instance for right eye sight.
+ *                                        If this isn't specified, passLeft will
+ *                                        also be used for right eye sight.
+ */
+THREE.ShaderVRPass = function ( vrDisplay, passLeft, passRight ) {
 
 	THREE.Pass.call( this );
 
-	// pass is for left eye
-	// pass2 is for right eye
-	// if pass2 is undefined, pass is used for the both eyes
+	this.vrDisplay = vrDisplay;
 
-	// use the parameter of pass so far
-	this.enabled = pass.enabled;
-	this.renderToScreen = pass.renderToScreen;
+	// using the parameter of passLeft so far
+	this.enabled = passLeft.enabled;
+	this.renderToScreen = passLeft.renderToScreen;
 
 	this.passes = [];
-	this.passes.push( pass );
-	if ( pass2 !== undefined ) this.passes.push( pass2 );
+	this.passes.push( passLeft );
+	if ( passRight !== undefined ) this.passes.push( passRight );
 
 	// material for separating
 	var shader = THREE.CopyShader;
-
-	this.material = new THREE.ShaderMaterial( {
-
+	this.materialSeparate = new THREE.ShaderMaterial( {
 		defines: shader.defines || {},
 		uniforms: THREE.UniformsUtils.clone( shader.uniforms ),
 		vertexShader: shader.vertexShader,
 		fragmentShader: shader.fragmentShader
-
 	} );
 
 	// material for combining
-	var shader = THREE.CopyShader2;
-
-	this.material2 = new THREE.ShaderMaterial( {
-
+	var shader = THREE.VRCombineShader;
+	this.materialCombine = new THREE.ShaderMaterial( {
 		defines: shader.defines || {},
 		uniforms: THREE.UniformsUtils.clone( shader.uniforms ),
 		vertexShader: shader.vertexShader,
 		fragmentShader: shader.fragmentShader
-
 	} );
 
 	this.camera = new THREE.OrthographicCamera( - 1, 1, 1, - 1, 0, 1 );
@@ -52,20 +52,24 @@ THREE.ShaderVRPass = function ( pass, pass2 ) {
 		stencilBuffer: false
 	};
 
+	// expects width and height will be updated later from EffectComposer.addPass()
 	var renderTarget = new THREE.WebGLRenderTarget( 1, 1, parameters );
 
+	// for separating
 	this.renderTargetsFirst = [];
 	this.renderTargetsFirst[ 0 ] = renderTarget;
 	this.renderTargetsFirst[ 0 ].texture.name = "ShaderVRPass.firstLeft";
 	this.renderTargetsFirst[ 1 ] = renderTarget.clone();
 	this.renderTargetsFirst[ 1 ].texture.name = "ShaderVRPass.firstRight";
 
+	// for applying pass
 	this.renderTargetsSecond = [];
 	this.renderTargetsSecond[ 0 ] = renderTarget.clone();
 	this.renderTargetsSecond[ 0 ].texture.name = "ShaderVRPass.secondLeft";
 	this.renderTargetsSecond[ 1 ] = renderTarget.clone();
 	this.renderTargetsSecond[ 1 ].texture.name = "ShaderVRPass.secondRight";
 
+	//
 	this.quad = new THREE.Mesh( new THREE.PlaneBufferGeometry( 2, 2 ), null );
 	this.quad.frustumCulled = false; // Avoid getting clipped
 	this.scene.add( this.quad );
@@ -88,10 +92,13 @@ THREE.ShaderVRPass.prototype = Object.assign( Object.create( THREE.Pass.prototyp
 
 	setSize: function ( width, height ) {
 
-		this.renderTargetsFirst[ 0 ].setSize( width * 0.5, height );
-		this.renderTargetsFirst[ 1 ].setSize( width * 0.5, height );
-		this.renderTargetsSecond[ 0 ].setSize( width * 0.5, height );
-		this.renderTargetsSecond[ 1 ].setSize( width * 0.5, height );
+		for ( var i = 0; i < 2; i ++ ) {
+
+			// TODO: use the parameter of vrDisplay.getLayers()?
+			this.renderTargetsFirst[ i ].setSize( width * 0.5, height );
+			this.renderTargetsSecond[ i ].setSize( width * 0.5, height );
+
+		}
 
 		for ( var i = 0, il = this.passes.length; i < il; i ++ ) {
 
@@ -103,84 +110,129 @@ THREE.ShaderVRPass.prototype = Object.assign( Object.create( THREE.Pass.prototyp
 
 	render: function( renderer, writeBuffer, readBuffer, delta, maskActive ) {
 
-		this.material.uniforms.tDiffuse.value = readBuffer.texture;
-		this.quad.material = this.material;
+		if ( this.vrDisplay.isPresenting ) {
 
-		for ( var i = 0; i < 2; i ++ ) {
+			this.materialSeparate.uniforms.tDiffuse.value = readBuffer.texture;
+			this.quad.material = this.materialSeparate;
 
-			var pass = this.passes.length >= 2 ? this.passes[ i ] : this.passes[ 0 ];
-			var renderTarget1 = this.renderTargetsFirst[ i ];
-			var renderTarget2 = this.renderTargetsSecond[ i ];
+			// 1. exports left/right half from the original
 
-			this.updateUvs( i );
+			for ( var i = 0; i < 2; i ++ ) {
 
-			// 1. export half from the original image
+				if ( i === 0 ) {
 
-			renderer.render( this.scene, this.camera, renderTarget1 );
+					this.updateUvsForLeft();
 
-			// 2. apply pass to the half
+				} else {
 
-			pass.render( renderer, renderTarget2, renderTarget1, delta, maskActive );
+					this.updateUvsForRight();
 
-			if ( pass.needsSwap === true ) {
+				}
 
-				var tmp = this.renderTargetsFirst[ i ];
-				this.renderTargetsFirst[ i ] = this.renderTargetsSecond[ i ];
-				this.renderTargetsSecond[ i ] = tmp;
+				renderer.render( this.scene, this.camera, this.renderTargetsFirst[ i ] );
 
 			}
 
-		}
+			// 2. apply pass to the left/right half
 
-		// 3. Combine left and right
+			for ( var i = 0; i < 2; i ++ ) {
 
-		this.updateUvs( 2 );
+				var pass = this.passes.length >= 2 ? this.passes[ i ] : this.passes[ 0 ];
 
-		this.material2.uniforms.left.value = this.renderTargetsFirst[ 0 ].texture;
-		this.material2.uniforms.right.value = this.renderTargetsFirst[ 1 ].texture;
-		this.quad.material = this.material2;
+				var currentRenderToScreen = pass.renderToScreen;
+				pass.renderToScreen = false;
+				pass.render( renderer, this.renderTargetsSecond[ i ], this.renderTargetsFirst[ i ], delta, maskActive );
+				pass.renderToScreen = currentRenderToScreen;
 
-		if ( this.renderToScreen ) {
+				// seems like this's necessary?
+				if ( pass.needsSwap === true ) {
 
-			renderer.render( this.scene, this.camera );
+					var tmp = this.renderTargetsFirst[ i ];
+					this.renderTargetsFirst[ i ] = this.renderTargetsSecond[ i ];
+					this.renderTargetsSecond[ i ] = tmp;
+
+				}
+
+			}
+
+			// 3. Combine left and right
+
+			this.resetUvs();
+
+			this.materialCombine.uniforms.left.value = this.renderTargetsFirst[ 0 ].texture;
+			this.materialCombine.uniforms.right.value = this.renderTargetsFirst[ 1 ].texture;
+			this.quad.material = this.materialCombine;
+
+			if ( this.renderToScreen ) {
+
+				renderer.render( this.scene, this.camera );
+
+				this.vrDisplay.submitFrame();
+
+			} else {
+
+				renderer.render( this.scene, this.camera, writeBuffer, this.clear );
+
+			}
+
+			this.needsSwap = true;
 
 		} else {
 
-			renderer.render( this.scene, this.camera, writeBuffer, this.clear );
+			// using passLeft for non presenting mode
+			var pass = this.passes[ 0 ];
+			var currentRenderToScreen = pass.renderToScreen;
+			pass.renderToScreen = this.renderToScreen;
+			pass.render( renderer, writeBuffer, readBuffer, delta, maskActive );
+			pass.renderToScreen = currentRenderToScreen;
+
+			this.needsSwap = pass.needsSwap;
 
 		}
 
 	},
 
-	updateUvs: function ( num ) {
+	updateUvsForLeft: function () {
 
-		var uv = this.quad.geometry.attributes.uv
+		var uv = this.quad.geometry.attributes.uv;
 		var array = uv.array;
 
-		// TODO: these parameters should be from vrDisplay maybe?
+		// TODO: these parameters should be from vrDisplay.getLayers() maybe?
 
-		if ( num === 0 ) { // left
+		array[ 0 ] = 0.0;
+		array[ 2 ] = 0.5;
+		array[ 4 ] = 0.0;
+		array[ 6 ] = 0.5;
 
-			array[ 0 ] = 0.0;
-			array[ 2 ] = 0.5;
-			array[ 4 ] = 0.0;
-			array[ 6 ] = 0.5;
+		uv.needsUpdate = true;
 
-		} else if ( num === 1 ) { // right
+	},
 
-			array[ 0 ] = 0.5;
-			array[ 2 ] = 1.0;
-			array[ 4 ] = 0.5;
-			array[ 6 ] = 1.0;
+	updateUvsForRight: function () {
 
-		} else { // combine
+		var uv = this.quad.geometry.attributes.uv;
+		var array = uv.array;
 
-			array[ 0 ] = 0.0;
-			array[ 2 ] = 1.0;
-			array[ 4 ] = 0.0;
-			array[ 6 ] = 1.0;
+		// TODO: these parameters should be from vrDisplay.getLayers() maybe?
 
-		}
+		array[ 0 ] = 0.5;
+		array[ 2 ] = 1.0;
+		array[ 4 ] = 0.5;
+		array[ 6 ] = 1.0;
+
+		uv.needsUpdate = true;
+
+	},
+
+	resetUvs: function () {
+
+		var uv = this.quad.geometry.attributes.uv;
+		var array = uv.array;
+
+		array[ 0 ] = 0.0;
+		array[ 2 ] = 1.0;
+		array[ 4 ] = 0.0;
+		array[ 6 ] = 1.0;
 
 		uv.needsUpdate = true;
 
@@ -188,7 +240,8 @@ THREE.ShaderVRPass.prototype = Object.assign( Object.create( THREE.Pass.prototyp
 
 } );
 
-THREE.CopyShader2 = {
+// shader for combining left and right half
+THREE.VRCombineShader = {
 
 	uniforms: {
 

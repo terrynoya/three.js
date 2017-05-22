@@ -36,13 +36,11 @@
 
 		<script src="js/shaders/CopyShader.js"></script>
 		<script src="js/shaders/DigitalGlitch.js"></script>
-		<script src="js/shaders/LuminosityHighPassShader.js"></script>
 
 		<script src="js/postprocessing/EffectComposer.js"></script>
 		<script src="js/postprocessing/RenderPass.js"></script>
 		<script src="js/postprocessing/MaskPass.js"></script>
 		<script src="js/postprocessing/ShaderPass.js"></script>
-		<script src="js/postprocessing/UnrealBloomPass.js"></script>
 		<script src="js/postprocessing/GlitchPass.js"></script>
 
 		<script src="js/postprocessing/ShaderVRPass.js"></script>
@@ -81,6 +79,7 @@
 				document.body.appendChild( renderer.domElement );
 
 				camera = new THREE.WebVRCamera( vrdisplay, renderer );
+				camera.enableSubmitFrame( false ); // disables because it's invoked by ShaderVRPass
 
 				controls = new THREE.VRControls( camera );
 				controls.setVRDisplay( vrdisplay );
@@ -124,13 +123,7 @@
 				composer = new THREE.EffectComposer( renderer );
 				composer.setSize( window.innerWidth, window.innerHeight );
 
-				var renderPass = new THREE.RenderPass( scene, camera );
-				composer.addPass( renderPass );
-
-				var bloomPass = new THREE.UnrealBloomPass(
-					new THREE.Vector2( window.innerWidth, window.innerHeight ),
-					1.0, 0.7, 0.1
-				);
+				composer.addPass( new THREE.RenderPass( scene, camera ) );
 
 				var glitchPass = new THREE.GlitchPass();
 
@@ -145,14 +138,9 @@
 					}
 				);
 
-				var copyPass = new THREE.ShaderPass( THREE.CopyShader );
-				copyPass.renderToScreen = true;
+				composer.addPass( new THREE.ShaderVRPass( vrdisplay, glitchPass, shaderPass ) );
 
-				composer.addPass( new THREE.ShaderVRPass( bloomPass ) );
-				//composer.addPass( new THREE.ShaderVRPass( glitchPass ) );
-				//composer.addPass( new THREE.ShaderVRPass( shaderPass ) );
-				//composer.addPass( new THREE.ShaderVRPass( shaderPass, glitchPass ) );
-				composer.addPass( copyPass );
+				composer.passes[ composer.passes.length - 1 ].renderToScreen = true;
 
 				//
 
@@ -183,7 +171,6 @@
 				object.rotation.y += 0.01;
 
 				composer.render();
-				if ( vrdisplay.isPresenting ) vrdisplay.submitFrame();
 
 			}
 

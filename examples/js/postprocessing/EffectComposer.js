@@ -168,6 +168,7 @@ Object.assign( THREE.Pass.prototype, {
 
 	setSize: function( width, height ) {},
 
+	//
 	update: function ( renderer, writeBuffer, readBuffer, delta, maskActive ) {},
 
 	render: function ( renderer, writeBuffer, readBuffer, delta, maskActive ) {
